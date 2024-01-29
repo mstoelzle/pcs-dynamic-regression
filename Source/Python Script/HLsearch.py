@@ -74,6 +74,93 @@ def buildFunctionExpressions(P, d, data_description = None, use_sine=False):
             descr.append(function_description)
     return descr
 
+def buildLagrangianExpressions(P, d, data_description = None, use_sine=False):
+    """
+    generate a base of functions which are polynomials and trigonometric functions (sin and cos)
+
+    params:
+    P: max power in polynomial
+    d: number of variables
+    data_description: variables' name
+    use_sine: True for using trigonometric functions
+
+    return:
+    a list of functions
+    """
+    if use_sine:
+        sin_description=[]
+        cos_description=[]
+        for name in data_description[:d//2]:
+            sin_description = sin_description + ['sin(0.1*{})'.format(name)]
+            cos_description = cos_description + ['cos(0.1*{})'.format(name)]
+        data_description = data_description[:d//2] + sin_description + cos_description
+        d = len(data_description)
+
+    # Create a list of all polynomials in d variables up to degree P
+    rhs_functions = OrderedDict()
+    f = lambda x, y : np.prod(np.power(list(x), list(y)))
+    powers = []            
+    for p in range(1,P+1):
+            size = d + p - 1
+            for indices in itertools.combinations(range(size), d-1):
+                starts = [0] + [index+1 for index in indices]
+                stops = indices + (size,)
+                powers.append(tuple(map(operator.sub, stops, starts)))
+
+    # remove items where cos and sin have powers >=2 (also situations where it appers cos*sin)
+    indices_to_remove = []            
+    for i, power in enumerate(powers):
+        if (power[1] >= 2) or (power[2] >=2) or ((power[1]==1) and (power[2]==1)):
+            indices_to_remove.append(i)
+    for index in sorted(indices_to_remove, reverse=True):
+        del powers[index]
+
+    #### For Mass matrix terms ####
+    powers_mass = powers.copy()
+    # only include the correct terms, hopefully this can then be deleted
+    # first delete terms with q^2 and q^4
+    indices_to_remove = []
+    for i, power in enumerate(powers_mass):
+        if (power[0]==2) or (power[0]==4):
+            indices_to_remove.append(i)
+    for index in sorted(indices_to_remove, reverse=True):
+        del powers_mass[index]
+    # delete the remaining entries individually
+    powers_mass.remove((1,1,0))
+    powers_mass.remove((3,0,1))
+    powers_mass.remove((3,1,0))
+    powers_mass.remove((0,0,1))
+
+    for power in powers_mass:
+        # power=Reverse(power)
+        rhs_functions[power] = [lambda x, y = power: f(x,y), power]
+    
+    descr = []
+    for k in rhs_functions.keys():
+        if data_description is None: descr.append(str(rhs_functions[k][1]))
+        else:
+            function_description = ''
+            written=False
+            for j in range(d):
+                if rhs_functions[k][1][j] != 0:
+                    if written:
+                            function_description = function_description + '*'
+                    if rhs_functions[k][1][j] == 1:
+                        function_description = function_description + data_description[j]
+                        written=True
+                    else:
+                        function_description = function_description + data_description[j] + '**' + str(rhs_functions[k][1][j])
+                        written=True
+            descr.append(function_description)
+
+    for i in range(len(descr)):
+        descr[i] = descr[i] + '*x0_t**2/x0**5'
+    
+    descr.append('1/x0**2')
+    descr.append('cos(0.1*x0)/x0**2')
+    descr.append('x0**2')
+    return descr
+
 def buildTimeSerieFromFunction(data,function_description, data_description):
     column = []
     f=lambdify(data_description,function_description,'numpy')
@@ -152,7 +239,7 @@ def generateExpression(coefficient_vector,function_description,threshold = 1e-8)
         if abs(coef)>threshold:
             if ret!='' and coef>=0:
                 ret = ret + '+'
-            ret = ret + str(coef) + '*' + str(func)
+            ret = ret + str(coef) + '*' + '(' + str(func) + ')'
     if ret != '' : ret = sympify(ret) 
     return ret
 

@@ -3,15 +3,84 @@
 import HLsearch as HL
 import numpy as np
 
-from sympy import symbols, simplify, derive_by_array
+from sympy import symbols, simplify, derive_by_array, ordered
 
 import sympy
 import torch
 import sys
 sys.path.append(r'../../HLsearch/')
 
+def EulerLagrangeExpressionTensor(expr, states, states_epsed, states_epsed_sym):
+    """
+    A function dedicated to build a tensor with the expressions which are present on the Euler-Lagrange equation.
+    The lagrangian equation is described as follow
+    L = sum(c_k*phi_k)
+    tau = (D^2L_qdot2)*q_tt + (D^2L_qdotq)*q_t - DL_q 
 
-def LagrangianLibraryTensor(x, xdot, expr, states, states_dot, scaling=False, scales=None):
+    #Params:
+    expr                    : list of basis function (str) (d,)
+    states                  : list states variable description (str) (n,)
+    states_epsed            : list states variable with a small value added to avoid singularity (this just applies to bending) (str) (n,)
+    states_epsed sym        : list of symbolic states variable with a small value added to avoid singularity (this just applies to bending) (sympy) (n,)
+
+    #Return:
+    phi_q                   : derivative of basis functions w.r.t q
+    phi_qdot2               : double derivative of basis functions w.r.t qdot and qdot  
+    phi_qdotq               : double derivative of basis functions w.r.t qdot and q
+    """
+    n = len(states)
+
+    #define symbolically
+    q = sympy.Array(np.array(sympy.Matrix(states[:n//2])).squeeze().tolist())
+    q_epsed = sympy.Array(np.array(sympy.Matrix(states_epsed)).squeeze().tolist())
+    qdot = sympy.Array(np.array(sympy.Matrix(states[n//2:])).squeeze().tolist())
+    phi = sympy.Array(np.array(sympy.Matrix(expr)).squeeze().tolist())
+    phi_q = derive_by_array(phi, q).reshape(n//2, len(phi)) #Delta
+    phi_qdot = derive_by_array(phi, qdot).reshape(n//2, len(phi))
+    phi_qdot2 = derive_by_array(phi_qdot, qdot).reshape(n//2, n//2, len(phi)) #Zeta
+    phi_qdotq = derive_by_array(phi_qdot, q).reshape(n//2, n//2, len(phi)) #Eta
+
+    def len_symbol(e):
+        return len(str(e))
+    symbols = list(ordered(list(phi_q.free_symbols), keys=len_symbol)) # x0, x1, x2, ..., x0_t, x1_t, x2_t, ...
+
+    # The entries corresponding to the Elastic potential basis functions 
+    # should be kept as original configuration variables (not epsed) - these entries are the last
+    # (n//2) entries from the expr list
+    phi_q_not_epsed = phi_q[:,-(n//2):]
+    phi_qdot2_not_epsed = phi_qdot2[:,:,-(n//2):]
+    phi_qdotq_not_epsed = phi_qdotq[:,:,-(n//2):]
+    
+    # Replace the configuration variables by the epsed configuration variables
+    for i in range(n//2):
+        phi_q = phi_q.subs([
+            (symbols[i], states_epsed_sym[i]),
+        ])
+        phi_qdot2 = phi_qdot2.subs([
+            (symbols[i], states_epsed_sym[i]),
+        ])
+        phi_qdotq = phi_qdotq.subs([
+            (symbols[i], states_epsed_sym[i]),
+        ])
+
+    phi_q_assemble = np.empty(phi_q.shape, dtype=object)
+    phi_q_assemble[:,:-(n//2)] = phi_q[:,:-(n//2)]
+    phi_q_assemble[:,-(n//2):] = phi_q_not_epsed
+    phi_q = phi_q_assemble
+
+    phi_qdot2_assemble = np.empty(phi_qdot2.shape, dtype=object)
+    phi_qdot2_assemble[:,:,:-(n//2)] = phi_qdot2[:,:,:-(n//2)]
+    phi_qdot2_assemble[:,:,-(n//2):] = phi_qdot2_not_epsed
+    phi_qdot2 = phi_qdot2_assemble
+
+    phi_qdotq_assemble = np.empty(phi_qdotq.shape, dtype=object)
+    phi_qdotq_assemble[:,:,:-(n//2)] = phi_qdotq[:,:,:-(n//2)]
+    phi_qdotq_assemble[:,:,-(n//2):] = phi_qdotq_not_epsed
+    phi_qdotq = phi_qdotq_assemble
+
+    return phi_q, phi_qdot2, phi_qdotq
+
+def LagrangianLibraryTensor(x, xdot, x_epsed, states, states_dot, states_epsed, phi_q, phi_qdot2, phi_qdotq, scaling=False):
     """
     A function dedicated to build time-series tensor for the lagrangian equation.
     The lagrangian equation is described as follow
@@ -33,25 +102,20 @@ def LagrangianLibraryTensor(x, xdot, expr, states, states_dot, scaling=False, sc
     from torch import cos, sin
     x = torch.from_numpy(x)
     xdot = torch.from_numpy(xdot)
-    n = len(states)
-    q = sympy.Array(np.array(sympy.Matrix(states[:n//2])).squeeze().tolist())
-    qdot = sympy.Array(
-        np.array(sympy.Matrix(states[n//2:])).squeeze().tolist())
-    phi = sympy.Array(np.array(sympy.Matrix(expr)).squeeze().tolist())
-    phi_q = derive_by_array(phi, q)
-    phi_qdot = derive_by_array(phi, qdot)
-    phi_qdot2 = derive_by_array(phi_qdot, qdot)
-    phi_qdotq = derive_by_array(phi_qdot, q)
+    x_epsed = torch.from_numpy(x_epsed)
 
     i, j, k = np.array(phi_qdot2).shape
     l = x.shape[0]
-    Delta = torch.ones(j, k, l)
-    Zeta = torch.ones(i, j, k, l)
-    Eta = torch.ones(i, j, k, l)
+    Delta = torch.ones(j, k, l, dtype=torch.float64)
+    Zeta = torch.ones(i, j, k, l, dtype=torch.float64)
+    Eta = torch.ones(i, j, k, l, dtype=torch.float64)
 
     for idx in range(len(states)):
         locals()[states[idx]] = x[:, idx]
         locals()[states_dot[idx]] = xdot[:, idx]
+    
+    for idx in range(len(states_epsed)):
+        locals()[states_epsed[idx]] = x_epsed[:,idx]
 
     for n in range(j):
         for o in range(k):
@@ -91,7 +155,7 @@ def LagrangianLibraryTensor(x, xdot, expr, states, states_dot, scaling=False, sc
     return Zeta, Eta, Delta
 
 
-def lagrangianforward(coef, Zeta, Eta, Delta, xdot, device):
+def lagrangianforward(coef, Zeta, Eta, Delta, xdot, device, tau, D):
     """
     Computing time series of q_tt (q double dot) prediction
     #Params:
@@ -106,21 +170,26 @@ def lagrangianforward(coef, Zeta, Eta, Delta, xdot, device):
     DL_q = torch.einsum('jkl,k->jl', Delta, weight)
     DL_qdot2 = torch.einsum('ijkl,k->ijl', Zeta, weight)
     DL_qdotq = torch.einsum('ijkl,k->ijl', Eta, weight)
+    n = xdot.shape[1]
 
     if(torch.is_tensor(xdot) == False):
         xdot = torch.from_numpy(xdot).to(device).float()
-    q_t = xdot[:, :2].T
+    if(torch.is_tensor(tau) == False):
+        tau = torch.from_numpy(tau).to(device).float()
+    q_t = xdot[:, :n//2].T
 
     C = torch.einsum('ijl,il->jl', DL_qdotq, q_t)
     B = DL_q
     A = torch.einsum('ijl->lij', DL_qdot2)
+    Tau_NC = torch.einsum('ij,il->jl', -D, q_t)
     invA = torch.linalg.pinv(A)
     invA = torch.einsum('lij->ijl', invA)
-    q_tt = torch.einsum('ijl,jl->il', invA, B-C)
+    q_tt = torch.einsum('ijl,jl->il', invA, tau + Tau_NC + B - C)
+
     return q_tt
 
 
-def ELforward(coef, Zeta, Eta, Delta, xdot, device):
+def ELforward(coef, Zeta, Eta, Delta, xdot, device, D):
     """
     Computing time series of total sum of Euler-Lagrange equation
     #Params:
@@ -133,22 +202,25 @@ def ELforward(coef, Zeta, Eta, Delta, xdot, device):
     #Returns:
     El          : Time series of the left hand side of Euler's Lagranges equation (n, time-series)
     """
-    weight = coef
+
+    weight = coef.to(device)
+
     DL_q = torch.einsum('jkl,k->jl', Delta, weight)
     DL_qdot2 = torch.einsum('ijkl,k->ijl', Zeta, weight)
     DL_qdotq = torch.einsum('ijkl,k->ijl', Eta, weight)
     n = xdot.shape[1]
 
     if(torch.is_tensor(xdot) == False):
-        xdot = torch.from_numpy(xdot).to(device).float()
+        xdot = torch.from_numpy(xdot).to(device)
     q_t = xdot[:, :n//2].T
     q_tt = xdot[:, n//2:].T
 
     C = torch.einsum('ijl,il->jl', DL_qdotq, q_t)
     B = DL_q
     A = torch.einsum('ijl,il->jl', DL_qdot2, q_tt)
-    EL = A + C - B
-    return EL
+    Tau_NC = torch.einsum('ij,il->jl', -D, q_t)
+    EL = A + C - B - Tau_NC
+    return EL, DL_q, DL_qdot2, DL_qdotq, A, C, B, Tau_NC
 
 
 def Upsilonforward(Zeta, Eta, Delta, xdot, device):
