@@ -10,7 +10,7 @@ import torch
 import sys
 sys.path.append(r'../../HLsearch/')
 
-def EulerLagrangeExpressionTensor(expr, states, states_epsed, states_epsed_sym):
+def EulerLagrangeExpressionTensor(expr, states, states_epsed_sym=None):
     """
     A function dedicated to build a tensor with the expressions which are present on the Euler-Lagrange equation.
     The lagrangian equation is described as follow
@@ -32,7 +32,6 @@ def EulerLagrangeExpressionTensor(expr, states, states_epsed, states_epsed_sym):
 
     #define symbolically
     q = sympy.Array(np.array(sympy.Matrix(states[:n//2])).squeeze().tolist())
-    q_epsed = sympy.Array(np.array(sympy.Matrix(states_epsed)).squeeze().tolist())
     qdot = sympy.Array(np.array(sympy.Matrix(states[n//2:])).squeeze().tolist())
     phi = sympy.Array(np.array(sympy.Matrix(expr)).squeeze().tolist())
     phi_q = derive_by_array(phi, q).reshape(n//2, len(phi)) #Delta
@@ -40,43 +39,46 @@ def EulerLagrangeExpressionTensor(expr, states, states_epsed, states_epsed_sym):
     phi_qdot2 = derive_by_array(phi_qdot, qdot).reshape(n//2, n//2, len(phi)) #Zeta
     phi_qdotq = derive_by_array(phi_qdot, q).reshape(n//2, n//2, len(phi)) #Eta
 
-    def len_symbol(e):
-        return len(str(e))
-    symbols = list(ordered(list(phi_q.free_symbols), keys=len_symbol)) # x0, x1, x2, ..., x0_t, x1_t, x2_t, ...
+    if states_epsed_sym != None:
+        def len_symbol(e):
+            return len(str(e))
+        symbols = list(ordered(list(phi_q.free_symbols), keys=len_symbol)) # x0, x1, x2, ..., x0_t, x1_t, x2_t, ...
 
-    # The entries corresponding to the Elastic potential basis functions 
-    # should be kept as original configuration variables (not epsed) - these entries are the last
-    # (n//2) entries from the expr list
-    phi_q_not_epsed = phi_q[:,-(n//2):]
-    phi_qdot2_not_epsed = phi_qdot2[:,:,-(n//2):]
-    phi_qdotq_not_epsed = phi_qdotq[:,:,-(n//2):]
-    
-    # Replace the configuration variables by the epsed configuration variables
-    for i in range(n//2):
-        phi_q = phi_q.subs([
-            (symbols[i], states_epsed_sym[i]),
-        ])
-        phi_qdot2 = phi_qdot2.subs([
-            (symbols[i], states_epsed_sym[i]),
-        ])
-        phi_qdotq = phi_qdotq.subs([
-            (symbols[i], states_epsed_sym[i]),
-        ])
+        # The entries corresponding to the Elastic potential basis functions 
+        # should be kept as original configuration variables (not epsed) - these entries are the last
+        # (n//2) entries from the expr list
+        phi_q_not_epsed = phi_q[:,-(n//2):]
+        phi_qdot2_not_epsed = phi_qdot2[:,:,-(n//2):]
+        phi_qdotq_not_epsed = phi_qdotq[:,:,-(n//2):]
+        
+        # Replace the configuration variables by the epsed configuration variables
+        for i in range(n//2):
+            phi_q = phi_q.subs([
+                (symbols[i], states_epsed_sym[i]),
+            ])
+            phi_qdot2 = phi_qdot2.subs([
+                (symbols[i], states_epsed_sym[i]),
+            ])
+            phi_qdotq = phi_qdotq.subs([
+                (symbols[i], states_epsed_sym[i]),
+            ])
 
-    phi_q_assemble = np.empty(phi_q.shape, dtype=object)
-    phi_q_assemble[:,:-(n//2)] = phi_q[:,:-(n//2)]
-    phi_q_assemble[:,-(n//2):] = phi_q_not_epsed
-    phi_q = phi_q_assemble
+        phi_q_assemble = np.empty(phi_q.shape, dtype=object)
+        phi_q_assemble[:,:-(n//2)] = phi_q[:,:-(n//2)]
+        phi_q_assemble[:,-(n//2):] = phi_q_not_epsed
+        phi_q = phi_q_assemble
 
-    phi_qdot2_assemble = np.empty(phi_qdot2.shape, dtype=object)
-    phi_qdot2_assemble[:,:,:-(n//2)] = phi_qdot2[:,:,:-(n//2)]
-    phi_qdot2_assemble[:,:,-(n//2):] = phi_qdot2_not_epsed
-    phi_qdot2 = phi_qdot2_assemble
+        phi_qdot2_assemble = np.empty(phi_qdot2.shape, dtype=object)
+        phi_qdot2_assemble[:,:,:-(n//2)] = phi_qdot2[:,:,:-(n//2)]
+        phi_qdot2_assemble[:,:,-(n//2):] = phi_qdot2_not_epsed
+        phi_qdot2 = phi_qdot2_assemble
+        # phi_qdot2 = np.transpose(phi_qdot2, (1,0,2))
 
-    phi_qdotq_assemble = np.empty(phi_qdotq.shape, dtype=object)
-    phi_qdotq_assemble[:,:,:-(n//2)] = phi_qdotq[:,:,:-(n//2)]
-    phi_qdotq_assemble[:,:,-(n//2):] = phi_qdotq_not_epsed
-    phi_qdotq = phi_qdotq_assemble
+        phi_qdotq_assemble = np.empty(phi_qdotq.shape, dtype=object)
+        phi_qdotq_assemble[:,:,:-(n//2)] = phi_qdotq[:,:,:-(n//2)]
+        phi_qdotq_assemble[:,:,-(n//2):] = phi_qdotq_not_epsed
+        phi_qdotq = phi_qdotq_assemble
+        # phi_qdotq = np.transpose(phi_qdotq, (1,0,2))
 
     return phi_q, phi_qdot2, phi_qdotq
 
@@ -220,7 +222,7 @@ def ELforward(coef, Zeta, Eta, Delta, xdot, device, D):
     A = torch.einsum('ijl,il->jl', DL_qdot2, q_tt)
     Tau_NC = torch.einsum('ij,il->jl', -D, q_t)
     EL = A + C - B - Tau_NC
-    return EL, DL_q, DL_qdot2, DL_qdotq, A, C, B, Tau_NC
+    return EL#, DL_q, DL_qdot2, DL_qdotq, A, C, B, Tau_NC
 
 
 def Upsilonforward(Zeta, Eta, Delta, xdot, device):
