@@ -157,12 +157,42 @@ if bending_indices != []:
     Xdot = Xdot[mask]
     Tau = Tau[mask]
 
-# adding noise
-mu, sigma = 0, noiselevel
-noise = np.random.normal(mu, sigma, X.shape[0])
-for i in range(X.shape[1]):
-    X[:,i] = X[:,i] + noise
-    Xdot[:,i] = Xdot[:,i] + noise
+def apply_eps_to_bend_strains(q_bend, eps):
+
+    q_bend_sign = np.sign(q_bend)
+    q_bend_sign = np.where(q_bend_sign == 0, 1, q_bend_sign)
+
+    q_epsed = np.select(
+        [np.abs(q_bend)<eps, np.abs(q_bend)>=eps],
+        [q_bend_sign*eps, q_bend]
+    )
+    # old implementation
+    # q_epsed = q_bend + (q_bend_sign * eps)
+    return q_epsed
+
+def apply_eps_to_bend_strains_jnp(q_bend, eps):
+
+    q_bend_sign = jnp.sign(q_bend)
+    q_bend_sign = jnp.where(q_bend_sign == 0, 1, q_bend_sign)
+
+    q_epsed = lax.select(
+        jnp.abs(q_bend) < eps,
+        q_bend_sign*eps,
+        q_bend
+    )
+    # old implementation
+    # q_epsed = q_bend + (q_bend_sign * eps)
+    return q_epsed
+
+# Compute epsed bending states
+X_epsed = np.zeros((X.shape[0], n_dof))
+for i in range(n_dof):
+    if bending_map[i] == True:
+        q_epsed = apply_eps_to_bend_strains(X[:,i], epsilon_bend)
+    else:
+        q_epsed = X[:,i]
+    
+    X_epsed[:,i] = q_epsed
 
 # Create the states nomenclature
 states_dim = 2*n_dof  #q and q_dot
@@ -388,41 +418,7 @@ expr = [ele/(mean_basis_fcns[idx]) for idx, ele in enumerate(true_expr)]
 # expr = [ele/(max_basis_fcns[idx]-min_basis_fcns[idx]) for idx, ele in enumerate(expr)]
 #####################################################################################
 
-def apply_eps_to_bend_strains(q_bend, eps):
 
-    q_bend_sign = np.sign(q_bend)
-    q_bend_sign = np.where(q_bend_sign == 0, 1, q_bend_sign)
-
-    q_epsed = np.select(
-        [np.abs(q_bend)<eps, np.abs(q_bend)>=eps],
-        [q_bend_sign*eps, q_bend]
-    )
-    # old implementation
-    # q_epsed = q_bend + (q_bend_sign * eps)
-    return q_epsed
-
-def apply_eps_to_bend_strains_jnp(q_bend, eps):
-
-    q_bend_sign = jnp.sign(q_bend)
-    q_bend_sign = jnp.where(q_bend_sign == 0, 1, q_bend_sign)
-
-    q_epsed = lax.select(
-        jnp.abs(q_bend) < eps,
-        q_bend_sign*eps,
-        q_bend
-    )
-    # old implementation
-    # q_epsed = q_bend + (q_bend_sign * eps)
-    return q_epsed
-
-X_epsed = np.zeros((X.shape[0], n_dof))
-for i in range(n_dof):
-    if bending_map[i] == True:
-        q_epsed = apply_eps_to_bend_strains(X[:,i], epsilon_bend)
-    else:
-        q_epsed = X[:,i]
-    
-    X_epsed[:,i] = q_epsed
 
 ############## Closed form least squares ##############
 def compute_X_ls(n_dof, X_ls_lambda, X, Xdot, X_epsed):

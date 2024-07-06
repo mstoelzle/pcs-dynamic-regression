@@ -4,7 +4,7 @@ import sys
 from sympy import symbols, simplify, derive_by_array, ordered, poly
 from scipy.integrate import solve_ivp
 from scipy.signal import savgol_filter
-from xLSINDy import EulerLagrangeExpressionTensor, LagrangianLibraryTensor, ELforward
+from xLSINDy import EulerLagrangeExpressionTensor
 import sympy
 import torch
 torch.set_printoptions(precision=10)
@@ -27,82 +27,60 @@ compute_stiffness_matrix_for_all_segments_fn = vmap(
         compute_planar_stiffness_matrix, in_axes=(0, 0, 0, 0), out_axes=0
     )
 
-# rootdir = "./Source/Soft Robot/ns-2_dof-3_random_actuation/"  
-# rootdir = "./Source/Soft Robot/ns-1_bending_and_axial/"
-rootdir = "./Source/Soft Robot/ns-1_dof-3_random_actuation/"
-# rootdir = "./Source/Soft Robot/ns-2_bsab/"
-noiselevel = 0
+# rootdir = "./Source/Soft Robot/ns-1_dof-2/"
+rootdir = "./Source/Soft Robot/ns-1_bending_shear/"
+# rootdir = "./Source/Soft Robot/ns-1_dof-3_low_actuation/"
+# rootdir = "./Source/Soft Robot/ns-1_dof-3_high_shear_stiffness_true_acc/"
+rootdir_true = "./Source/Soft Robot/ns-1_bending_shear_true/"
+# rootdir_true = "./Source/Soft Robot/ns-1_dof-3_low_actuation_true/"
 
 # Load dataset
 X_all = np.load(rootdir + "X.npy")
 Xdot_all = np.load(rootdir + "Xdot.npy")
 Tau_all = np.load(rootdir + "Tau.npy")
+X_all_true = np.load(rootdir_true + "X.npy")
+Xdot_all_true = np.load(rootdir_true + "Xdot.npy")
+Tau_all_true = np.load(rootdir_true + "Tau.npy")
 
 # Stack variables (from all initial conditions)
-X = (X_all[:-1])
-Xdot = (Xdot_all[:-1])
-Tau = (Tau_all[:-1])
-X = np.vstack(X)
-Xdot = np.vstack(Xdot)
-Tau = np.vstack(Tau)
+X = np.vstack(X_all[:-1])
+Xdot = np.vstack(Xdot_all[:-1])
+Tau = np.vstack(Tau_all[:-1])
+X_true = np.vstack(X_all_true[:-1])
+Xdot_true = np.vstack(Xdot_all_true[:-1])
+Tau_true = np.vstack(Tau_all_true[:-1])
+
+# X[:,3:] = X_true[:,3:]
+# Xdot[:,3:] = Xdot_true[:,3:]
 
 X_val = np.array(X_all[-1])
 Xdot_val = np.array(Xdot_all[-1])
 Tau_val = np.array(Tau_all[-1])
+X_val_true = np.array(X_all_true[-1])
+Xdot_val_true = np.array(Xdot_all_true[-1])
+Tau_val_true = np.array(Tau_all_true[-1])
 
-# Delete some strains
+Tau = np.insert(Tau, [2], np.zeros((Tau.shape[0], 1)), axis=1)
+Tau_val = np.insert(Tau_val, [2], np.zeros((Tau_val.shape[0], 1)), axis=1)
+
+# # Delete some strains
 # X = np.delete(X, [1,4], 1)
 # Xdot = np.delete(Xdot, [1,4], 1)
-# Tau = np.delete(Tau, 1, 1)
+# # Tau = np.delete(Tau, 0, 1)
 # X_val = np.delete(X_val, [1,4], 1)
 # Xdot_val = np.delete(Xdot_val, [1,4], 1)
-# Tau_val = np.delete(Tau_val, 1, 1)
+# # Tau_val = np.delete(Tau_val, 0, 1)
 
-# # Add dummy strains
-# num_dummy_strains = 3
-# q_dummy = np.zeros((X.shape[0] + X_val.shape[0], num_dummy_strains))
-# q_t_dummy = np.zeros((X.shape[0] + X_val.shape[0], num_dummy_strains))
-# q_tt_dummy = np.zeros((X.shape[0] + X_val.shape[0], num_dummy_strains))
-# for i in range(num_dummy_strains):
-#     noise = np.random.normal(loc=1e-3, scale=0, size=q_dummy.shape[0])
-#     q_dummy[:,i] = q_dummy[:,i] + noise
-#     q_t_dummy[:,i] = 1e-4*np.ones(q_t_dummy.shape[0])
-#     q_tt_dummy[:,i] = 1e-5*np.ones(q_tt_dummy.shape[0])
-#     # q_dummy[:,i] = savgol_filter(q_dummy[:,i] + noise, 1000, 3)
-#     # q_t_dummy[:,i] = savgol_filter(q_dummy[:,i], 1000, 3, deriv=1, delta=1e-4)
-#     # q_tt_dummy[:,i] = savgol_filter(q_dummy[:,i], 1000, 3, deriv=2, delta=1e-4)
-
-# for i in range(num_dummy_strains):
-#     fig, ax = plt.subplots(3,1)
-
-#     ax[0].plot(q_tt_dummy[:5000,i])
-#     ax[0].set_ylabel('$\ddot{q}$')
-#     ax[0].grid(True)
-
-#     ax[1].plot(q_t_dummy[:5000,i])
-#     ax[1].set_ylabel('$\dot{q}$')
-#     ax[1].grid(True)
-
-#     ax[2].plot(q_dummy[:5000,i])
-#     ax[2].set_ylabel('$q$')
-#     ax[2].grid(True)
-
-#     fig.suptitle('Data generation - Shear')
-#     fig.tight_layout()
-#     plt.show()
-
-# X = np.insert(X, [3,3,3,6,6,6], np.concatenate((q_dummy[:X.shape[0],:], q_t_dummy[:X.shape[0],:]), axis=1), axis=1)
-# X_val = np.insert(X_val, [3,3,3,6,6,6], np.concatenate((q_dummy[X.shape[0]:,:], q_t_dummy[X.shape[0]:,:]), axis=1), axis=1)
-# Xdot = np.insert(Xdot, [3,3,3,6,6,6], np.concatenate((q_t_dummy[:X.shape[0],:], q_tt_dummy[:X.shape[0],:]), axis=1), axis=1)
-# Xdot_val = np.insert(Xdot_val, [3,3,3,6,6,6], np.concatenate((q_t_dummy[X.shape[0]:,:], q_tt_dummy[X.shape[0]:,:]), axis=1), axis=1)
-# Tau = np.insert(Tau, [3,3,3], 1e-5*np.ones((Tau.shape[0], 3)), axis=1)
-# Tau_val = np.insert(Tau_val, [3,3,3], 1e-5*np.ones((Tau_val.shape[0], 3)), axis=1)
+## Add true strains
+X_true = np.insert(X_true, [2,4], np.zeros((X_true.shape[0], 1)), axis=1)
+Xdot_true = np.insert(Xdot_true, [2,4], np.zeros((Xdot_true.shape[0], 1)), axis=1)
 
 ####################################################################
 #### Soft manipulator parameters - change based on the use case ####
 num_segments = 1
-strain_selector = np.array([True, True, False]) # bending, shear and axial
-string_strains = ['Bending','Shear']
+strain_selector = np.array([True, True, True]) # bending, shear and axial
+string_strains = ['Bending','Shear','Axial']
+strain_segments = [0, 0, 0]
 
 bending_map = [] # from the list of active states says which ones are bending state and which ones are not
 for i in range(len(strain_selector)):
@@ -114,7 +92,7 @@ for i in range(len(strain_selector)):
 bending_map = np.asarray(bending_map)
 
 n_dof = np.sum(strain_selector)
-epsilon_bend = 1e0
+epsilon_bend = 5e-2
 params = {
     "th0": jnp.array(0.0),  # initial orientation angle [rad]
     "l": 1e-1 * jnp.ones((num_segments,)),
@@ -123,8 +101,8 @@ params = {
     "g": jnp.array([0.0, 9.81]), 
     "E": 1e4 * jnp.ones((num_segments,)),  # Elastic modulus [Pa] # for bending
     # "E": jnp.array([1e4, 1e4]),
-    "G": 1e7 * jnp.ones((num_segments,)),  # Shear modulus [Pa]
-    "D": 5e-6 * jnp.diag(jnp.array([3e0, 1e3, 1e4])),
+    "G": 1e3 * jnp.ones((num_segments,)),  # Shear modulus [Pa]
+    "D": 5e-6 * jnp.diag(jnp.array([1e0, 1e4, 8e3])),
     # "D": 5e-6 * jnp.diag(jnp.array([3e1, 1e5, 1e4, 3e1, 1e3, 1e4])),
 }
 params["length"] = np.sum(params["l"])
@@ -134,6 +112,8 @@ params["Ib"] = params["A"]**2 / (4 * jnp.pi)
 S = compute_stiffness_matrix_for_all_segments_fn(params["A"], params["Ib"], params["E"], params["G"])
 K = blk_diag(S)
 params["K"] = np.array(K)
+params["E_max"] = 1e8 
+params["G_max"] = 1e6
 
 B_xi = compute_strain_basis(strain_selector)
 xi_eq = jnp.zeros((3*num_segments,))
@@ -143,15 +123,39 @@ rest_strain_reshaped = rest_strain_reshaped.at[:, -1].set(1.0)
 xi_eq = rest_strain_reshaped.flatten()
 ####################################################################
 
+for i in range(n_dof):
+    fig, ax = plt.subplots(3,1)
+    ax[2].plot(X_true[:,i], label='GT w/ Num Diff acc')
+    ax[2].plot(X[:,i], label='CV')
+    ax[2].set_ylabel('$q$')
+    ax[2].legend(loc="upper right")
+    ax[2].grid(True)
+    ax[1].plot(X_true[:,n_dof+i], label='GT w/ Num Diff acc')
+    ax[1].plot(Xdot[:,i], label='CV')
+    ax[1].set_ylabel('$\dot{q}$')
+    ax[1].legend(loc="upper right")
+    ax[1].grid(True)
+    ax[0].plot(Xdot_true[:,n_dof+i], label='GT w/ Num Diff acc')
+    ax[0].plot(Xdot[:,n_dof+i], label='CV')
+    ax[0].set_ylabel('$\ddot{q}$')
+    ax[0].legend(loc="upper right")
+    ax[0].grid(True)
+    fig.suptitle('Dataset - ' + string_strains[i])
+    plt.show()
+
 # Remove samples where bending is smaller than a certain threshold => allows better learning
 bending_indices = [i for i in range(len(bending_map)) if bending_map[i]==True]
 if bending_indices != []:
     mask = True
     for idx in bending_indices:
-        mask = mask & (np.abs(X[:,idx]) >= 0)
+        mask = mask & (np.abs(X[:,idx]) >= 1.0)
+        mask_true = mask & (np.abs(X_true[:,idx]) >= 1.0)
     X = X[mask]
+    X_true = X_true[mask_true]
     Xdot = Xdot[mask]
+    Xdot_true = Xdot_true[mask_true]
     Tau = Tau[mask]
+    Tau_true = Tau_true[mask_true]
 
 def apply_eps_to_bend_strains(q_bend, eps):
 
@@ -159,7 +163,7 @@ def apply_eps_to_bend_strains(q_bend, eps):
     q_bend_sign = np.where(q_bend_sign == 0, 1, q_bend_sign)
 
     q_epsed = np.select(
-        [np.abs(q_bend)<eps, np.abs(q_bend)>=eps],
+        [np.abs(q_bend)<eps, np.abs(q_bend)>=eps],            
         [q_bend_sign*eps, q_bend]
     )
     # old implementation
@@ -189,6 +193,34 @@ for i in range(n_dof):
         q_epsed = X[:,i]
     
     X_epsed[:,i] = q_epsed
+
+for i in range(n_dof):
+    fig, ax = plt.subplots(3,1)
+    ax[2].plot(X_true[:,i], label='GT w/ Num Diff acc')
+    ax[2].plot(X[:,i], label='CV')
+    ax[2].set_ylabel('$q$')
+    ax[2].legend(loc="upper right")
+    ax[2].grid(True)
+    ax[1].plot(X_true[:,n_dof+i], label='GT w/ Num Diff acc')
+    ax[1].plot(X[:,n_dof+i], label='CV')
+    ax[1].set_ylabel('$\dot{q}$')
+    ax[1].legend(loc="upper right")
+    ax[1].grid(True)
+    ax[0].plot(Xdot_true[:,n_dof+i], label='GT w/ Num Diff acc')
+    ax[0].plot(Xdot[:,n_dof+i], label='CV')
+    ax[0].set_ylabel('$\ddot{q}$')
+    ax[0].legend(loc="upper right")
+    ax[0].grid(True)
+    fig.suptitle('Dataset after removing samples - ' + string_strains[i])
+    plt.show()
+
+# for i in range(n_dof):
+#     fig, ax = plt.subplots(1,1)
+#     ax.plot(X[:,i], label='X')
+#     ax.plot(X_epsed[:,i], label='X_epsed')
+#     ax.grid(True)
+#     ax.legend(loc="upper right")
+#     plt.show()
 
 # Create the states nomenclature
 states_dim = 2*n_dof  #q and q_dot
@@ -271,7 +303,7 @@ def B_decomp(expr, xi_sym):
     # separate coefficients and basis functions
     p = expr.as_poly(domain='RR[pi]')
     # p = expr.as_poly()
-    if p==None: # p is only a constant
+    if p == None: # p is only a constant
         coeffs = [expr]
         monoms = [1]
     else:
@@ -423,39 +455,18 @@ def constructLagrangianExpression(sym_exps, states_sym):
 
     return expr, true_coeffs, kinetic_energy, potential_energy
 
-Lagr_expr_symbolic_length, true_coeffs_before_norm, kinetic_energy, potential_energy = constructLagrangianExpression(sym_exps, states_sym)
+Lagr_expr, true_coeffs_before_norm, _, _ = constructLagrangianExpression(sym_exps, states_sym)
 # In case there is independent term, remove it from both lists (Lagrangian is invariant to constants)
-true_coeffs_before_norm = np.asarray([ele for idx, ele in enumerate(true_coeffs_before_norm) if list(Lagr_expr_symbolic_length[idx].free_symbols)!=[]])
-Lagr_expr_symbolic_length = [ele for idx, ele in enumerate(Lagr_expr_symbolic_length) if list(Lagr_expr_symbolic_length[idx].free_symbols)!=[]]
+true_coeffs_before_norm = np.asarray([ele for idx, ele in enumerate(true_coeffs_before_norm) if list(Lagr_expr[idx].free_symbols)!=[]])
+Lagr_expr = [ele for idx, ele in enumerate(Lagr_expr) if list(Lagr_expr[idx].free_symbols)!=[]]
 
 convergence = False
 
 while convergence == False:
     n_dof = len(states_sym)//2
 
-    symbols = list(ordered(list(sympy.Matrix(Lagr_expr_symbolic_length).free_symbols)))
-    length_variables = [word for word in symbols if str(word)[0]=='l']
-    print(length_variables)
-
-    Lagr_expr = sympy.Matrix(Lagr_expr_symbolic_length)
-    for l_var in length_variables:
-        Lagr_expr = Lagr_expr.subs(l_var, params['length']/len(length_variables))
-    Lagr_expr = list(Lagr_expr)
-
     # In case there is independent term, remove it (Lagrangian is invariant to constants)
-    Lagr_expr_symbolic_length = [ele for idx, ele in enumerate(Lagr_expr_symbolic_length) if list(Lagr_expr_symbolic_length[idx].free_symbols)!=[]]
     Lagr_expr = [ele for idx, ele in enumerate(Lagr_expr) if list(Lagr_expr[idx].free_symbols)!=[]]
-
-    # Compute the coefficient mapping matrix
-    mapping_matrix = np.zeros((n_dof, len(Lagr_expr) + n_dof))
-    for i in range(len(Lagr_expr) + n_dof):
-        for q in range(n_dof):
-            if i < len(Lagr_expr): # coefficients present in the lagrangian
-                if (states_sym[q] in list(ordered(list(Lagr_expr[i].free_symbols)))) or (states_sym[q+n_dof] in list(ordered(list(Lagr_expr[i].free_symbols)))):
-                    mapping_matrix[q,i] = 1
-            else: # coefficients for the damping basis functions
-                if (i - len(Lagr_expr)) == q:
-                    mapping_matrix[q,i] = 1
 
     ########### From Lagrangian expr to EoM expr #############
     phi_q, phi_qdot2, phi_qdotq = EulerLagrangeExpressionTensor(Lagr_expr, states, states_epsed_sym)
@@ -470,11 +481,9 @@ while convergence == False:
 
     # Evaluate EoM basis functions on the training dataset for normalization
     EoMrhs_lambda = sympy.lambdify([*states_sym[:n_dof], *states_sym[n_dof:], *states_dot_sym[n_dof:], *states_epsed_sym], EoMrhs_expr, 'jax')
-
     def compute_EoMrhs(n_dof, EoMrhs_lambda, X, Xdot, X_epsed):
         EoMrhs = EoMrhs_lambda(*X[:n_dof], *X[n_dof:], *Xdot[n_dof:], *X_epsed[:])
         return EoMrhs
-
     compute_batch_EoMrhs = vmap(compute_EoMrhs, in_axes=(None, None, 0, 0, 0), out_axes=2)
     EoMrhs = compute_batch_EoMrhs(n_dof, EoMrhs_lambda, X, Xdot, X_epsed)
     EoMrhs = torch.from_numpy(np.asarray(EoMrhs).copy())
@@ -493,7 +502,6 @@ while convergence == False:
     def compute_EoMrhs_bar(n_dof, EoMrhs_bar_lambda, X, Xdot, X_epsed):
         EoMrhs_bar = EoMrhs_bar_lambda(*X[:n_dof], *X[n_dof:], *Xdot[n_dof:], *X_epsed[:])
         return EoMrhs_bar
-
     compute_batch_EoMrhs_bar = vmap(compute_EoMrhs_bar, in_axes=(None, None, 0, 0, 0), out_axes=2)
     EoMrhs_bar = compute_batch_EoMrhs_bar(n_dof, EoMrhs_bar_lambda, X, Xdot, X_epsed)
     EoMrhs_bar = torch.from_numpy(np.asarray(EoMrhs_bar).copy())
@@ -503,6 +511,10 @@ while convergence == False:
     coeffs_before_norm = coeffs_after_norm[:,0] / norm_factor
     xi_L = coeffs_before_norm[:-n_dof]
     D = torch.diag(coeffs_before_norm[-n_dof:])
+    print('xi_L[-3:]')
+    print(xi_L[-3:])
+    print('D:')
+    print(D)
 
     # xi_L = torch.from_numpy(true_coeffs_before_norm)
     # D = B_xi.T @ params['D'] @ B_xi
@@ -523,9 +535,9 @@ while convergence == False:
     def compute_Tau(inverse_dynamics_expr_lambda, X, Xdot, X_epsed):
         tau = inverse_dynamics_expr_lambda(*X[:n_dof], *X[n_dof:], *Xdot[n_dof:], *X_epsed[:])[:,0]
         return tau
-
     compute_batch_tau = vmap(compute_Tau, in_axes=(None, 0, 0, 0), out_axes=0)
     tau_pred = compute_batch_tau(inverse_dynamics_expr_lambda, X, Xdot, X_epsed)
+
     lossval = loss(torch.from_numpy(np.asarray(tau_pred).copy()), torch.from_numpy(Tau))
     print('\nTraining loss:')
     print(lossval)
@@ -544,20 +556,20 @@ while convergence == False:
             ax[i].grid(True)
     plt.show()
 
-    ### Compute the p-norm of coefficients associated with each strain
-    p = 1
-    coeffs_after_norm = coeffs_after_norm.detach().cpu().numpy()
-    norm_coefficients = np.power( (mapping_matrix @ np.power(np.abs(coeffs_after_norm), p)), 1./p )[:,0]
-    threshold = np.max(norm_coefficients)/10
-    threshold = 0.1
+    # Get estimated stiffness
+    stiffness = -np.array(xi_L[-n_dof:])
+    # Get maximum stiffness
+    max_stiffness = np.zeros((n_dof,))
+    for i in range(n_dof):
+        if string_strains[i] == 'Bending':
+            max_stiffness[i] = 0.25*(np.pi*(params['r'][strain_segments[i]])**4)*params['E_max']
+        elif string_strains[i] == 'Shear':
+            max_stiffness[i] = (4/3)*np.pi*((params['r'][strain_segments[i]])**2)*params['G_max']
+        else:
+            max_stiffness[i] = np.pi*((params['r'][strain_segments[i]])**2)*params['E_max']
 
-    print('\nCoefficient norms:')
-    print(norm_coefficients)
-    print('(threshold is ' + str(threshold) + ')')
-
-    # Neglect strains for which the norm of coefficients < threshold
-    # neglect_strain_index = np.nonzero((norm_coefficients < threshold))[0]
-    neglect_strain_index = np.array([0])
+    neglect_strain_index = np.nonzero((stiffness > max_stiffness))[0]
+    # neglect_strain_index = np.array([])
     if neglect_strain_index.size == 0: # all norms are above the threshold
         convergence = True
         print('\nResult:')
@@ -575,24 +587,17 @@ while convergence == False:
                     ])
                 )
 
-                Lagr_expr_symbolic_length = list(
-                    sympy.Matrix(Lagr_expr_symbolic_length).subs([
-                        (states_sym[index], 0),
-                        (states_sym[index+n_dof], 0)
-                    ])
-                )
+                # kinetic_energy = kinetic_energy.subs([
+                #     (states_sym[index], 0),
+                #     (states_sym[index+n_dof], 0),
+                #     (states_epsed_sym[index], 0),
+                # ])
 
-                kinetic_energy = kinetic_energy.subs([
-                    (states_sym[index], 0),
-                    (states_sym[index+n_dof], 0),
-                    (states_epsed_sym[index], 0),
-                ])
-
-                potential_energy = potential_energy.subs([
-                    (states_sym[index], 0),
-                    (states_sym[index+n_dof], 0),
-                    (states_epsed_sym[index], 0),
-                ])
+                # potential_energy = potential_energy.subs([
+                #     (states_sym[index], 0),
+                #     (states_sym[index+n_dof], 0),
+                #     (states_epsed_sym[index], 0),
+                # ])
             else:
                 Lagr_expr = list(
                     sympy.Matrix(Lagr_expr).subs([
@@ -601,32 +606,32 @@ while convergence == False:
                     ])
                 )
 
-                Lagr_expr_symbolic_length = list(
-                    sympy.Matrix(Lagr_expr_symbolic_length).subs([
-                        (states_sym[index], epsilon_bend),
-                        (states_sym[index+n_dof], 0)
-                    ])
-                )
+                # kinetic_energy = kinetic_energy.subs([
+                #     (states_sym[index], epsilon_bend),
+                #     (states_sym[index+n_dof], 0),
+                #     (states_epsed_sym[index], epsilon_bend),
+                # ])
 
-                kinetic_energy = kinetic_energy.subs([
-                    (states_sym[index], epsilon_bend),
-                    (states_sym[index+n_dof], 0),
-                    (states_epsed_sym[index], epsilon_bend),
-                ])
+                # potential_energy = potential_energy.subs([
+                #     (states_sym[index], epsilon_bend),
+                #     (states_sym[index+n_dof], 0),
+                #     (states_epsed_sym[index], epsilon_bend),
+                # ])
 
-                potential_energy = potential_energy.subs([
-                    (states_sym[index], epsilon_bend),
-                    (states_sym[index+n_dof], 0),
-                    (states_epsed_sym[index], epsilon_bend),
-                ])
+        # new_Lagr_expr = []
+        # [new_Lagr_expr.append(x) for x in Lagr_expr if x not in new_Lagr_expr and list(x.free_symbols)!=[]]
+        # Lagr_expr = new_Lagr_expr
 
         new_Lagr_expr = []
-        [new_Lagr_expr.append(x) for x in Lagr_expr if x not in new_Lagr_expr]
+        for expr in Lagr_expr:
+            p = expr.as_poly()
+            if p != None:
+                monom = [sympy.prod(x**k for x, k in zip(p.gens, mon)) for mon in p.monoms()]
+                for m in monom:
+                    if m not in new_Lagr_expr:
+                        new_Lagr_expr.append(m)
         Lagr_expr = new_Lagr_expr
 
-        new_Lagr_expr_symbolic_length = []
-        [new_Lagr_expr_symbolic_length.append(x) for x in Lagr_expr_symbolic_length if x not in new_Lagr_expr_symbolic_length]
-        Lagr_expr_symbolic_length = new_Lagr_expr_symbolic_length
 
         states_sym = [ele for idx, ele in enumerate(states_sym) if ((idx != neglect_strain_index[0]) and (idx != neglect_strain_index[0]+n_dof))]
         states_dot_sym = [ele for idx, ele in enumerate(states_dot_sym) if ((idx != neglect_strain_index[0]) and (idx != neglect_strain_index[0]+n_dof))]
@@ -639,6 +644,7 @@ while convergence == False:
 
         string_strains = [ele for idx, ele in enumerate(string_strains) if (idx != neglect_strain_index[0])]
         bending_map = [ele for idx, ele in enumerate(bending_map) if (idx != neglect_strain_index[0])]
+        strain_segments = [ele for idx, ele in enumerate(strain_segments) if (idx != neglect_strain_index[0])]
 
         # Delete neglected strains
         X = np.delete(X, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
@@ -675,8 +681,8 @@ def generate_data(func, time, init_values, Tau):
     indexes = np.unique(Tau[:,0], return_index=True)[1]
     tau_unique = [Tau[index,:] for index in sorted(indexes)]
 
-    for count, t in enumerate(time[::100]):
-        tau = Tau[count*100, :]
+    for count, t in enumerate(time[::10]):
+        tau = Tau[count*10, :]
         # tau = tau_unique[count]
         
         if t==0:
@@ -684,24 +690,24 @@ def generate_data(func, time, init_values, Tau):
                 ODETerm(func),
                 solver=Tsit5(),
                 t0=time[0],
-                t1=time[::100][1],
-                dt0=dt,
+                t1=time[::10][1],
+                dt0=1e-6,
                 y0=init_values,
                 args=(tau, D.detach().cpu().numpy()),
                 max_steps=None,
-                saveat=SaveAt(ts=jnp.arange(0.0, time[::100][1]+dt, dt)),
+                saveat=SaveAt(ts=jnp.arange(0.0, time[::10][1]+dt, dt)),
             )
         else:
             sol = diffeqsolve(
                 ODETerm(func),
                 solver=Tsit5(),
                 t0=time[0],
-                t1=time[::100][1],
-                dt0=dt,
+                t1=time[::10][1],
+                dt0=1e-6,
                 y0=sol_list[-1][-1],
                 args=(tau, D.detach().cpu().numpy()),
                 max_steps=None,
-                saveat=SaveAt(ts=jnp.arange(0.0, time[::100][1]+dt, dt)),
+                saveat=SaveAt(ts=jnp.arange(0.0, time[::10][1]+dt, dt)),
             )
         
         sol_list.append(sol.ys[1:,:])
@@ -730,7 +736,7 @@ def softrobot(t,x,args):
     x_epsed_list = []
     for i in range(x.shape[0]//2):
         if bending_map[i] == True:
-            q_epsed = apply_eps_to_bend_strains_jnp(x_[i], 1e0)
+            q_epsed = apply_eps_to_bend_strains_jnp(x_[i], 3e0)
         else:
             q_epsed = x_[i]
         
@@ -743,14 +749,19 @@ def softrobot(t,x,args):
     return jnp.concatenate([x_t, x_tt])
 
 ## Validation results ##
-# true results
-q_tt_true = (Xdot_val[:,n_dof:].T).copy()
-q_t_true = (Xdot_val[:,:n_dof].T).copy()
-q_true = (X_val[:,:n_dof].T).copy()
+# true validation dataset
+q_tt_true = (Xdot_val_true[:,n_dof:].T).copy()
+q_t_true = (Xdot_val_true[:,:n_dof].T).copy()
+q_true = (X_val_true[:,:n_dof].T).copy()
+
+# CV validation dataset
+q_tt_cv = (Xdot_val[:,n_dof:].T).copy()
+q_t_cv = (Xdot_val[:,:n_dof].T).copy()
+q_cv = (X_val[:,:n_dof].T).copy()
 tau_true = (Tau_val.T).copy()
 
 # prediction results
-dt = 1e-4  # time step
+dt = 1e-3  # time step
 time_ = jnp.arange(0.0, 0.5, dt)
 y_0 = X_val[0,:]
 Xpred, Xdotpred = generate_data(softrobot, time_, y_0, Tau_val)
@@ -767,7 +778,7 @@ if save==True:
 X_epsed_val = np.zeros((X_val.shape[0], n_dof))
 for i in range(n_dof):
     if bending_map[i] == True:
-        q_epsed = apply_eps_to_bend_strains(X_val[:,i], 1e0)
+        q_epsed = apply_eps_to_bend_strains(X_val[:,i], 3e0)
     else:
         q_epsed = X_val[:,i]
     
@@ -780,13 +791,13 @@ print(lossval)
 
 fig, ax = plt.subplots(n_dof,1)
 if n_dof == 1:
-    ax.plot(torch.from_numpy(tau_true)[0,:], label='True Model')
+    ax.plot(torch.from_numpy(tau_true)[0,:], label='GT')
     ax.plot(tau_pred[:,0], 'r--',label='Predicted Model')
     ax.set_ylabel('$Tau$')
     ax.grid(True)
 else:
     for i in range(n_dof):
-        ax[i].plot(torch.from_numpy(tau_true)[i,:], label='True Model')
+        ax[i].plot(torch.from_numpy(tau_true)[i,:], label='GT')
         ax[i].plot(tau_pred[:,i], 'r--',label='Predicted Model')
         ax[i].set_ylabel('$Tau$')
         ax[i].grid(True)
@@ -798,20 +809,23 @@ t = time_
 for i in range(n_dof):
     fig, ax = plt.subplots(3,1)
 
-    ax[0].plot(t, q_tt_true[i,:], label='True Data')
-    ax[0].plot(t, q_tt_pred[i,:], 'r--',label='Predicted Model')
+    # ax[0].plot(t, q_tt_true[i,:], label='GT Data')
+    ax[0].plot(t, q_tt_cv[i,:], label='CV Data')
+    ax[0].plot(t, q_tt_pred[i,:], 'r--',label='Simulated Predicted Model')
     ax[0].set_ylabel('$\ddot{q}$')
     ax[0].set_xlim([0,0.5])
     ax[0].grid(True)
 
-    ax[1].plot(t, q_t_true[i,:], label='True Data')
-    ax[1].plot(t, q_t_pred[i,:], 'r--',label='Predicted Model')
+    # ax[1].plot(t, q_t_true[i,:], label='GT Data')
+    ax[1].plot(t, q_t_cv[i,:], label='CV Data')
+    ax[1].plot(t, q_t_pred[i,:], 'r--',label='Simulated Predicted Model')
     ax[1].set_ylabel('$\dot{q}$')
     ax[1].set_xlim([0,0.5])
     ax[1].grid(True)
 
-    ax[2].plot(t, q_true[i,:], label='True Data')
-    ax[2].plot(t, q_pred[i,:], 'r--',label='Predicted Model')
+    # ax[2].plot(t, q_true[i,:], label='GT Data')
+    ax[2].plot(t, q_cv[i,:], label='CV Data')
+    ax[2].plot(t, q_pred[i,:], 'r--',label='Simulated Predicted Model')
     ax[2].set_xlabel('Time (s)')
     ax[2].set_ylabel('$q$')
     ax[2].set_xlim([0,0.5])
@@ -824,21 +838,21 @@ for i in range(n_dof):
     fig.tight_layout()
     plt.show()
 
-kinetic_energy_lambda = sympy.lambdify([*states_sym[:n_dof], *states_sym[n_dof:], *states_epsed_sym], kinetic_energy, 'jax')
-potential_energy_lambda = sympy.lambdify([*states_sym[:n_dof], *states_sym[n_dof:], *states_epsed_sym], potential_energy, 'jax')
-def compute_energy(n_dof, lambda_function, X, Xdot, X_epsed):
-    energy = lambda_function(*X[:n_dof], *X[n_dof:], *X_epsed[:])
-    return energy
+# kinetic_energy_lambda = sympy.lambdify([*states_sym[:n_dof], *states_sym[n_dof:], *states_epsed_sym], kinetic_energy, 'jax')
+# potential_energy_lambda = sympy.lambdify([*states_sym[:n_dof], *states_sym[n_dof:], *states_epsed_sym], potential_energy, 'jax')
+# def compute_energy(n_dof, lambda_function, X, Xdot, X_epsed):
+#     energy = lambda_function(*X[:n_dof], *X[n_dof:], *X_epsed[:])
+#     return energy
 
-compute_batch_energy = vmap(compute_energy, in_axes=(None, None, 0, 0, 0), out_axes=0)
-kinetic_energy = compute_batch_energy(n_dof, kinetic_energy_lambda, X_val, Xdot_val, X_epsed_val)
-potential_energy = compute_batch_energy(n_dof, potential_energy_lambda, X_val, Xdot_val, X_epsed_val)
+# compute_batch_energy = vmap(compute_energy, in_axes=(None, None, 0, 0, 0), out_axes=0)
+# kinetic_energy = compute_batch_energy(n_dof, kinetic_energy_lambda, X_val, Xdot_val, X_epsed_val)
+# potential_energy = compute_batch_energy(n_dof, potential_energy_lambda, X_val, Xdot_val, X_epsed_val)
 
-fig, ax = plt.subplots(1,1)
-ax.plot(kinetic_energy, label='Kinetic energy')
-ax.plot(potential_energy, label='Potential energy')
-ax.set_ylabel('Energy')
-Line, Label = ax.get_legend_handles_labels()
-fig.legend(Line, Label, loc='upper right')
-ax.grid(True)
-plt.show()
+# fig, ax = plt.subplots(1,1)
+# ax.plot(kinetic_energy, label='Kinetic energy')
+# ax.plot(potential_energy, label='Potential energy')
+# ax.set_ylabel('Energy')
+# Line, Label = ax.get_legend_handles_labels()
+# fig.legend(Line, Label, loc='upper right')
+# ax.grid(True)
+# plt.show()
