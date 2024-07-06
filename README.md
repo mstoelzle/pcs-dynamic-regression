@@ -1,29 +1,19 @@
-# Extended-Lagrangian-SINDy-xL-SINDy-
+# Dynamic Regression
+This repository is based on the Extended Lagrangian SINDy (xL-SINDy) (check the original [here](https://github.com/AdamPurnomo/Extended-Lagrangian-SINDy-xL-SINDy-)). xL-SINDy is a learning based algorithm designed to obtain Lagrangian function of nonlinear dynamical systems from noisy measurement data. The Lagrangian function is modeled as a linear combination of nonlinear candidate functions, and Euler-Lagrange’s equation is used to formulate the objective cost function.
+
+The approach in this repository deviates from xL-SINDy because it doesn't use a "random" library of candidate nonlinear functions nor resorts to sparsifying that library. Instead, it uses all the basis functions that the Lagrangian of a planar PCS soft robot parametrization contains. The Euler-Lagrange’s equation is still used to formulate the objective cost function, and a normal regression is performed by applying least-squares to obtain the optimal coefficients.
 
 ## Overview
-Extended Lagrangian SINDy (xL-SINDy) is a learning based algorithm designed to obtain Lagrangian function of nonlinear dynamical systems from noisy measurement data. This method is inspired by [SINDy](https://www.pnas.org/content/113/15/3932) (the Sparse identification of Nonlinear Dynamics). The Lagrangian function is modeled as a linear combination of nonlinear candidate functions, and Euler-Lagrange’s equation is used to formulate the objective cost function. The optimization of the learning process is done with proximal gradient method. 
-
-![overview](/images/overview.png)
-
-
-
-## Examples
-The effectiveness of xL-SINDy  is demonstrated against different noise levels in physical simulation with four dynamical systems: A single pendulum, a cart-pendulum, a double pendulum, and a spherical pendulum.
-
-<p align="center">
-  <img width=25% height=25% src="https://github.com/AdamPurnomo/Extended-Lagrangian-SINDy-xL-SINDy-/blob/main/images/systems.png?raw=true">
-</p>
-
-<p align="center">
-  <img width=75% height=75% src="https://raw.githubusercontent.com/AdamPurnomo/Extended-Lagrangian-SINDy-xL-SINDy-/main/images/resfull.png">
-</p>
 
 ## Installation
-* Clone this repository `git clone https://github.com/AdamPurnomo/Extended-Lagrangian-SINDy-xL-SINDy-.git`
-* Install the environment and dependencies `conda env create -f environment.yml`
+* Clone this repository
+* Install dependencies (see below)
 
 ## How to Use
-Please take a look at `Source/Notebook/[System Name] - Train.ipynb` or `Source/Python Script/[System Name]_Train.py` and run the code.
+The two main folders are `Source/Soft Robot` and `Source/Python Script`.
+1) `Source/Soft Robot` stores all the datasets used for the Dynamic Regression. The folders state the type of soft robot used in the simulation to obtain those datasets (e.g `Source/Soft Robot/ns-1_dof-3`). The datasets include three files: `X.npy` hold the data for (strain) position and velocity; `Xdot.npy` contain data for (strain) velocity and acceleration; `Tau.npy` have the actuation data. Additionally, `Source/Soft Robot/symbolic_expressions` contain the files with the basis functions for the planar PCS robots.
+
+2) `Source/Python Script` contain the scripts used in the Dynamic Regression. The **main script** is `Source/Python Script/SoftRobot_DynamicRegression.py` (the other soft robot scripts are deprecated versions, and the other scripts for different systems are from the original repository). Run this file to do the dynamic regression. Auxiliary functions used in this script are in the `Source/Python Script/xLSINDy.py` file and `Source/Python Script/utils` folder.
 
 ## Dependencies
 * numpy 1.19.2
