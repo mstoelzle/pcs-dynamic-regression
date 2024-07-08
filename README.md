@@ -3,8 +3,6 @@ This repository is based on the Extended Lagrangian SINDy (xL-SINDy) (check the 
 
 The approach in this repository deviates from xL-SINDy because it doesn't use a "random" library of candidate nonlinear functions nor resorts to sparsifying that library. Instead, it uses all the basis functions that the Lagrangian of a planar PCS soft robot parametrization contains. The Euler-Lagrange’s equation is still used to formulate the objective cost function, and a normal regression is performed by applying least-squares to obtain the optimal coefficients.
 
-## Overview
-
 ## Installation
 * Clone this repository
 * Install dependencies (see below)
