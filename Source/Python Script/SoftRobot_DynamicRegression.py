@@ -19,28 +19,69 @@ from jax import numpy as jnp
 from jax import config, lax, vmap, jit
 config.update("jax_enable_x64", True)
 config.update('jax_platform_name', 'cpu')
+# Plotting settings
+# plt.rc('font', family='serif', serif='Times')
+# plt.rc('text', usetex=True)
+# plt.rc('xtick', labelsize=10)
+# plt.rc('ytick', labelsize=10)
+# plt.rc('axes', labelsize=10)
 
 from utils.math_utils import blk_diag
 from utils.utils import compute_planar_stiffness_matrix, compute_strain_basis
 
-compute_stiffness_matrix_for_all_segments_fn = vmap(
-        compute_planar_stiffness_matrix, in_axes=(0, 0, 0, 0), out_axes=0
-    )
+####################################################################
+#### Soft manipulator parameters - change based on the use case ####
+num_segments = 2
+strain_selector = np.array([True, True, True, True, True, True]) # bending, shear and axial
+string_strains = ['Bending','Shear','Axial','Bending','Shear','Axial']
 
+epsilon_bend = 5e-2
+E_max = 1e8 
+G_max = 1e5
+G_max = 1e9
+####################################################################
+## Compute additional parameters
+bending_map = [] # from the list of active states says which ones are bending state and which ones are not
+for i in range(len(strain_selector)):
+    if strain_selector[i]==True:
+        if i%3==0:
+            bending_map.append(True)
+        else:
+            bending_map.append(False)
+bending_map = np.asarray(bending_map)
+n_dof = np.sum(strain_selector)
+strain_segments = [seg for seg in range(num_segments) for i in range(3)]
+
+######################## Load dataset #############################
 # rootdir = "./Source/Soft Robot/ns-1_dof-2/"
-# rootdir = "./Source/Soft Robot/ns-1_bending_shear/"
-rootdir = "./Source/Soft Robot/ns-1_dof-3_low_actuation/"
+# rootdir = "./Source/Soft Robot/ns-1_bending_axial/"
+# rootdir = "./Source/Soft Robot/ns-1_dof-3_stiff_shear_and_torques/"
+# rootdir = "./Source/Soft Robot/ns-1_dof-3_G_1e7_true_acc/"
+rootdir = "./Source/Soft Robot/ns-1_dof-3_G_1e6_torque_2_high_res/"
+# rootdir = "./Source/Soft Robot/ns-1_dof-3/"
+# rootdir = "./Source/Soft Robot/ns-1_dof-3_G_1e7_large_torque_larger_D/"
 # rootdir = "./Source/Soft Robot/ns-1_dof-3_high_shear_stiffness_true_acc/"
-# rootdir_true = "./Source/Soft Robot/ns-1_bending_shear_true/"
-rootdir_true = "./Source/Soft Robot/ns-1_dof-3_low_actuation_true/"
+# rootdir_true = "./Source/Soft Robot/ns-1_bending_axial_true/"
+# rootdir_true = "./Source/Soft Robot/ns-1_dof-3_stiff_shear_and_torques_true_acc/"
+# rootdir_true = "./Source/Soft Robot/ns-1_dof-3_G_1e6_true_acc/"
+rootdir_true = "./Source/Soft Robot/ns-1_dof-3_G_1e6_torque_2_high_res_true_acc/"
+# rootdir_true = "./Source/Soft Robot/ns-1_dof-3_true/"
+# rootdir_true = "./Source/Soft Robot/ns-1_dof-3_G_1e7_large_torque_larger_D_true_acc/"
+# rootdir_2 = "./Source/Soft Robot/ns-1_dof-3_G_1e7_large_torque_true_acc/"
 
-# Load dataset
+rootdir = "./Source/Soft Robot/ns-2_dof-3_true/"
+rootdir_true = "./Source/Soft Robot/ns-2_dof-3_true/"
+
 X_all = np.load(rootdir + "X.npy")
 Xdot_all = np.load(rootdir + "Xdot.npy")
 Tau_all = np.load(rootdir + "Tau.npy")
 X_all_true = np.load(rootdir_true + "X.npy")
 Xdot_all_true = np.load(rootdir_true + "Xdot.npy")
 Tau_all_true = np.load(rootdir_true + "Tau.npy")
+
+# X_all_2 = np.load(rootdir_2 + "X.npy")
+# Xdot_all_2 = np.load(rootdir_2 + "Xdot.npy")
+
 
 # Stack variables (from all initial conditions)
 X = np.vstack(X_all[:-1])
@@ -49,6 +90,9 @@ Tau = np.vstack(Tau_all[:-1])
 X_true = np.vstack(X_all_true[:-1])
 Xdot_true = np.vstack(Xdot_all_true[:-1])
 Tau_true = np.vstack(Tau_all_true[:-1])
+
+# X_2 = np.vstack(X_all_2[:-1])
+# Xdot_2 = np.vstack(Xdot_all_2[:-1])
 
 # X[:,3:] = X_true[:,3:]
 # Xdot[:,3:] = Xdot_true[:,3:]
@@ -60,85 +104,42 @@ X_val_true = np.array(X_all_true[-1])
 Xdot_val_true = np.array(Xdot_all_true[-1])
 Tau_val_true = np.array(Tau_all_true[-1])
 
-# Tau = np.insert(Tau, [2], np.zeros((Tau.shape[0], 1)), axis=1)
-# Tau_val = np.insert(Tau_val, [2], np.zeros((Tau_val.shape[0], 1)), axis=1)
+# Tau = np.insert(Tau, [1], np.zeros((Tau.shape[0], 1)), axis=1)
+# Tau_val = np.insert(Tau_val, [1], np.zeros((Tau_val.shape[0], 1)), axis=1)
 
 # # Delete some strains
 # X = np.delete(X, [1,4], 1)
 # Xdot = np.delete(Xdot, [1,4], 1)
-# # Tau = np.delete(Tau, 0, 1)
+# Tau = np.delete(Tau, 1, 1)
 # X_val = np.delete(X_val, [1,4], 1)
 # Xdot_val = np.delete(Xdot_val, [1,4], 1)
-# # Tau_val = np.delete(Tau_val, 0, 1)
+# Tau_val = np.delete(Tau_val, 1, 1)
 
 ## Add true strains
-# X_true = np.insert(X_true, [2,4], np.zeros((X_true.shape[0], 1)), axis=1)
-# Xdot_true = np.insert(Xdot_true, [2,4], np.zeros((Xdot_true.shape[0], 1)), axis=1)
-
-####################################################################
-#### Soft manipulator parameters - change based on the use case ####
-num_segments = 1
-strain_selector = np.array([True, True, True]) # bending, shear and axial
-string_strains = ['Bending','Shear','Axial']
-strain_segments = [seg for seg in range(num_segments) for i in range(3)]
-
-bending_map = [] # from the list of active states says which ones are bending state and which ones are not
-for i in range(len(strain_selector)):
-    if strain_selector[i]==True:
-        if i%3==0:
-            bending_map.append(True)
-        else:
-            bending_map.append(False)
-bending_map = np.asarray(bending_map)
-
-n_dof = np.sum(strain_selector)
-epsilon_bend = 5e-2
-params = {
-    "th0": jnp.array(0.0),  # initial orientation angle [rad]
-    "l": 1e-1 * jnp.ones((num_segments,)),
-    "r": 2e-2 * jnp.ones((num_segments,)),
-    "rho": 1070 * jnp.ones((num_segments,)),
-    "g": jnp.array([0.0, 9.81]), 
-    "E": 1e4 * jnp.ones((num_segments,)),  # Elastic modulus [Pa] # for bending
-    # "E": jnp.array([1e4, 1e4]),
-    "G": 1e3 * jnp.ones((num_segments,)),  # Shear modulus [Pa]
-    "D": 5e-6 * jnp.diag(jnp.array([1e0, 1e4, 8e3])),
-    # "D": 5e-6 * jnp.diag(jnp.array([3e1, 1e5, 1e4, 3e1, 1e3, 1e4])),
-}
-params["length"] = np.sum(params["l"])
-params["A"] = jnp.pi * params["r"] ** 2
-params["Ib"] = params["A"]**2 / (4 * jnp.pi)
-# stiffness matrix of shape (num_segments, 3, 3)
-S = compute_stiffness_matrix_for_all_segments_fn(params["A"], params["Ib"], params["E"], params["G"])
-K = blk_diag(S)
-params["K"] = np.array(K)
-params["E_max"] = 1e8 
-params["G_max"] = 1e6
-
-B_xi = compute_strain_basis(strain_selector)
-xi_eq = jnp.zeros((3*num_segments,))
-# by default, set the axial rest strain (local y-axis) along the entire rod to 1.0
-rest_strain_reshaped = xi_eq.reshape((-1, 3))
-rest_strain_reshaped = rest_strain_reshaped.at[:, -1].set(1.0)
-xi_eq = rest_strain_reshaped.flatten()
-####################################################################
+# X_true = np.insert(X_true, [1,3], np.zeros((X_true.shape[0], 1)), axis=1)
+# Xdot_true = np.insert(Xdot_true, [1,3], np.zeros((Xdot_true.shape[0], 1)), axis=1)
+# X = np.insert(X, [1,3], np.zeros((X.shape[0], 1)), axis=1)
+# Xdot = np.insert(Xdot, [1,3], np.zeros((Xdot.shape[0], 1)), axis=1)
 
 for i in range(n_dof):
     fig, ax = plt.subplots(3,1)
-    ax[2].plot(X_true[:,i], label='GT w/ Num Diff acc')
-    ax[2].plot(X[:,i], label='CV')
+    ax[2].plot(X[:,i], label='Estimate')
+    ax[2].plot(X_true[:,i], label='GT')
+    # ax[2].plot(X_2[:,i], label='Estimate (large torques & D=5e0)')
     ax[2].set_ylabel('$q$')
-    ax[2].legend(loc="upper right")
+    # ax[2].legend(loc="upper right")
     ax[2].grid(True)
-    ax[1].plot(X_true[:,n_dof+i], label='GT w/ Num Diff acc')
-    ax[1].plot(Xdot[:,i], label='CV')
+    ax[1].plot(Xdot[:,i], label='Estimate')
+    ax[1].plot(X_true[:,n_dof+i], label='GT')
+    # ax[1].plot(X_2[:,n_dof+i], label='Estimate (large torques & D=5e0)')
     ax[1].set_ylabel('$\dot{q}$')
-    ax[1].legend(loc="upper right")
+    # ax[1].legend(loc="upper right")
     ax[1].grid(True)
-    ax[0].plot(Xdot_true[:,n_dof+i], label='GT w/ Num Diff acc')
-    ax[0].plot(Xdot[:,n_dof+i], label='CV')
+    ax[0].plot(Xdot[:,n_dof+i], label='Estimate')
+    ax[0].plot(Xdot_true[:,n_dof+i], label='GT')
+    # ax[0].plot(Xdot_2[:,n_dof+i], label='Estimate (large torques & D=5e0)')
     ax[0].set_ylabel('$\ddot{q}$')
-    ax[0].legend(loc="upper right")
+    # ax[0].legend(loc="upper right")
     ax[0].grid(True)
     fig.suptitle('Dataset - ' + string_strains[i])
     plt.show()
@@ -148,8 +149,8 @@ bending_indices = [i for i in range(len(bending_map)) if bending_map[i]==True]
 if bending_indices != []:
     mask = True
     for idx in bending_indices:
-        mask = mask & (np.abs(X[:,idx]) >= 1.0)
-        mask_true = mask & (np.abs(X_true[:,idx]) >= 1.0)
+        mask = mask & (np.abs(X[:,idx]) >= 5.0)
+        mask_true = mask & (np.abs(X_true[:,idx]) >= 5.0)
     X = X[mask]
     X_true = X_true[mask_true]
     Xdot = Xdot[mask]
@@ -194,25 +195,25 @@ for i in range(n_dof):
     
     X_epsed[:,i] = q_epsed
 
-for i in range(n_dof):
-    fig, ax = plt.subplots(3,1)
-    ax[2].plot(X_true[:,i], label='GT w/ Num Diff acc')
-    ax[2].plot(X[:,i], label='CV')
-    ax[2].set_ylabel('$q$')
-    ax[2].legend(loc="upper right")
-    ax[2].grid(True)
-    ax[1].plot(X_true[:,n_dof+i], label='GT w/ Num Diff acc')
-    ax[1].plot(X[:,n_dof+i], label='CV')
-    ax[1].set_ylabel('$\dot{q}$')
-    ax[1].legend(loc="upper right")
-    ax[1].grid(True)
-    ax[0].plot(Xdot_true[:,n_dof+i], label='GT w/ Num Diff acc')
-    ax[0].plot(Xdot[:,n_dof+i], label='CV')
-    ax[0].set_ylabel('$\ddot{q}$')
-    ax[0].legend(loc="upper right")
-    ax[0].grid(True)
-    fig.suptitle('Dataset after removing samples - ' + string_strains[i])
-    plt.show()
+# for i in range(n_dof):
+#     fig, ax = plt.subplots(3,1)
+#     ax[2].plot(X_true[:,i], label='GT w/ Num Diff acc')
+#     ax[2].plot(X[:,i], label='CV')
+#     ax[2].set_ylabel('$q$')
+#     ax[2].legend(loc="upper right")
+#     ax[2].grid(True)
+#     ax[1].plot(X_true[:,n_dof+i], label='GT w/ Num Diff acc')
+#     ax[1].plot(X[:,n_dof+i], label='CV')
+#     ax[1].set_ylabel('$\dot{q}$')
+#     ax[1].legend(loc="upper right")
+#     ax[1].grid(True)
+#     ax[0].plot(Xdot_true[:,n_dof+i], label='GT w/ Num Diff acc')
+#     ax[0].plot(Xdot[:,n_dof+i], label='CV')
+#     ax[0].set_ylabel('$\ddot{q}$')
+#     ax[0].legend(loc="upper right")
+#     ax[0].grid(True)
+#     fig.suptitle('Dataset after removing samples - ' + string_strains[i])
+#     plt.show()
 
 # Create the states nomenclature
 states_dim = 2*n_dof  #q and q_dot
@@ -248,6 +249,8 @@ true_coeffs_before_norm = expr_basis_fcns['true_coeffs_before_norm']
 phi_q = expr_basis_fcns['phi_q']
 phi_qdot2 = expr_basis_fcns['phi_qdot2']
 phi_qdotq = expr_basis_fcns['phi_qdotq']
+params = expr_basis_fcns['params']
+B_xi = expr_basis_fcns['B_xi']
 
 convergence = False
 count = 0
@@ -269,18 +272,18 @@ while convergence == False:
     EoMrhs_expr = sympy.Matrix(EoMrhs_expr_array)
 
     # Evaluate EoM basis functions on the training dataset for normalization
-    EoMrhs_lambda = sympy.lambdify([*states_sym[:n_dof], *states_sym[n_dof:], *states_dot_sym[n_dof:], *states_epsed_sym], EoMrhs_expr, 'jax')
-    def compute_EoMrhs(n_dof, EoMrhs_lambda, X, Xdot, X_epsed):
-        EoMrhs = EoMrhs_lambda(*X[:n_dof], *X[n_dof:], *Xdot[n_dof:], *X_epsed[:])
-        return EoMrhs
-    compute_batch_EoMrhs = vmap(compute_EoMrhs, in_axes=(None, None, 0, 0, 0), out_axes=2)
-    EoMrhs = compute_batch_EoMrhs(n_dof, EoMrhs_lambda, X, Xdot, X_epsed)
-    EoMrhs = torch.from_numpy(np.asarray(EoMrhs).copy())
-    EoMrhs = torch.flatten(EoMrhs.permute(0,2,1), end_dim=1)
+    # EoMrhs_lambda = sympy.lambdify([*states_sym[:n_dof], *states_sym[n_dof:], *states_dot_sym[n_dof:], *states_epsed_sym], EoMrhs_expr, 'jax')
+    # def compute_EoMrhs(n_dof, EoMrhs_lambda, X, Xdot, X_epsed):
+    #     EoMrhs = EoMrhs_lambda(*X[:n_dof], *X[n_dof:], *Xdot[n_dof:], *X_epsed[:])
+    #     return EoMrhs
+    # compute_batch_EoMrhs = vmap(compute_EoMrhs, in_axes=(None, None, 0, 0, 0), out_axes=2)
+    # EoMrhs = compute_batch_EoMrhs(n_dof, EoMrhs_lambda, X, Xdot, X_epsed)
+    # EoMrhs = torch.from_numpy(np.asarray(EoMrhs).copy())
+    # EoMrhs = torch.flatten(EoMrhs.permute(0,2,1), end_dim=1)
 
     # Normalize EoM basis functions
-    norm_factor = (1/(EoMrhs.shape[0]))*torch.sum(torch.abs(EoMrhs), 0)
-    # norm_factor = torch.ones(len(Lagr_expr) + n_dof)
+    # norm_factor = (1/(EoMrhs.shape[0]))*torch.sum(torch.abs(EoMrhs), 0)
+    norm_factor = torch.ones(len(Lagr_expr) + n_dof)
     for i in range(norm_factor.shape[0]):
         if norm_factor[i] == 0:
             norm_factor[i] = 1
@@ -300,8 +303,8 @@ while convergence == False:
     coeffs_before_norm = coeffs_after_norm[:,0] / norm_factor
     xi_L = coeffs_before_norm[:-n_dof]
     D = torch.diag(coeffs_before_norm[-n_dof:])
-    print('xi_L[-3:]')
-    print(xi_L[-3:])
+    print('-Stiffness')
+    print(xi_L[-n_dof:])
     print('D:')
     print(D)
 
@@ -346,16 +349,16 @@ while convergence == False:
     plt.show()
 
     # Get estimated stiffness
-    stiffness = -np.array(xi_L[-n_dof:])
+    stiffness = -2*np.array(xi_L[-n_dof:])
     # Get maximum stiffness
     max_stiffness = np.zeros((n_dof,))
     for i in range(n_dof):
         if string_strains[i] == 'Bending':
-            max_stiffness[i] = 0.25*(np.pi*(params['r'][strain_segments[i]])**4)*params['E_max']
+            max_stiffness[i] = (0.25*(np.pi*(params['r'][strain_segments[i]])**4)*E_max)
         elif string_strains[i] == 'Shear':
-            max_stiffness[i] = (4/3)*np.pi*((params['r'][strain_segments[i]])**2)*params['G_max']
+            max_stiffness[i] = ((4/3)*np.pi*((params['r'][strain_segments[i]])**2)*G_max)
         else:
-            max_stiffness[i] = np.pi*((params['r'][strain_segments[i]])**2)*params['E_max']
+            max_stiffness[i] = (np.pi*((params['r'][strain_segments[i]])**2)*E_max)
 
     neglect_strain_index = np.nonzero((stiffness > max_stiffness))[0]
     # neglect_strain_index = np.array([])
@@ -445,6 +448,8 @@ while convergence == False:
         X_val = np.delete(X_val, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
         Xdot_val = np.delete(Xdot_val, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
         Tau_val = np.delete(Tau_val, neglect_strain_index[0], 1)
+        X_val_true = np.delete(X_val_true, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
+        Xdot_val_true = np.delete(Xdot_val_true, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
 
 
 # ------------------- Validation ---------------------------
@@ -482,7 +487,7 @@ def generate_data(func, time, init_values, Tau):
                 solver=Tsit5(),
                 t0=time[0],
                 t1=time[::10][1],
-                dt0=1e-6,
+                dt0=1e-5,
                 y0=init_values,
                 args=(tau, D.detach().cpu().numpy()),
                 max_steps=None,
@@ -494,7 +499,7 @@ def generate_data(func, time, init_values, Tau):
                 solver=Tsit5(),
                 t0=time[0],
                 t1=time[::10][1],
-                dt0=1e-6,
+                dt0=1e-5,
                 y0=sol_list[-1][-1],
                 args=(tau, D.detach().cpu().numpy()),
                 max_steps=None,
@@ -527,7 +532,7 @@ def softrobot(t,x,args):
     x_epsed_list = []
     for i in range(x.shape[0]//2):
         if bending_map[i] == True:
-            q_epsed = apply_eps_to_bend_strains_jnp(x_[i], 3e0)
+            q_epsed = apply_eps_to_bend_strains_jnp(x_[i], 6e0)
         else:
             q_epsed = x_[i]
         
@@ -600,34 +605,67 @@ t = time_
 for i in range(n_dof):
     fig, ax = plt.subplots(3,1)
 
-    # ax[0].plot(t, q_tt_true[i,:], label='GT Data')
-    ax[0].plot(t, q_tt_cv[i,:], label='CV Data')
+    ax[0].plot(t, q_tt_true[i,:], label='GT Data')
+    # ax[0].plot(t, q_tt_cv[i,:], label='CV Data')
     ax[0].plot(t, q_tt_pred[i,:], 'r--',label='Simulated Predicted Model')
     ax[0].set_ylabel('$\ddot{q}$')
     ax[0].set_xlim([0,0.5])
     ax[0].grid(True)
 
-    # ax[1].plot(t, q_t_true[i,:], label='GT Data')
-    ax[1].plot(t, q_t_cv[i,:], label='CV Data')
+    ax[1].plot(t, q_t_true[i,:], label='GT Data')
+    # ax[1].plot(t, q_t_cv[i,:], label='CV Data')
     ax[1].plot(t, q_t_pred[i,:], 'r--',label='Simulated Predicted Model')
     ax[1].set_ylabel('$\dot{q}$')
     ax[1].set_xlim([0,0.5])
     ax[1].grid(True)
 
-    # ax[2].plot(t, q_true[i,:], label='GT Data')
-    ax[2].plot(t, q_cv[i,:], label='CV Data')
+    ax[2].plot(t, q_true[i,:], label='GT Data')
+    # ax[2].plot(t, q_cv[i,:], label='CV Data')
     ax[2].plot(t, q_pred[i,:], 'r--',label='Simulated Predicted Model')
     ax[2].set_xlabel('Time (s)')
     ax[2].set_ylabel('$q$')
     ax[2].set_xlim([0,0.5])
     ax[2].grid(True)
+    ax[2].legend(loc="upper right")
 
-    Line, Label = ax[0].get_legend_handles_labels()
-    fig.legend(Line, Label, loc='upper right')
+    # Line, Label = ax[0].get_legend_handles_labels()
+    # fig.legend(Line, Label, loc='upper right')
     fig.suptitle('Simulation results xL-SINDY - ' + str(num_segments) + ' segments ' + str(n_dof) + ' DOF => ' + string_strains[i])
 
     fig.tight_layout()
     plt.show()
+
+fig, ax = plt.subplots(n_dof, 1, sharex=True)
+for i in range(n_dof):
+    if string_strains[i] == 'Bending':
+        ax[i].plot(t, q_pred[i,:], label='Obtained Model')
+        ax[i].plot(t, q_true[i,:], label='From kinematic model')
+        ax[i].set_ylabel('$\kappa_{be}$')
+        ax[i].set_xlim([0,0.5])
+        ax[i].grid(True)
+        ax[i].legend(loc='lower right')
+    elif string_strains[i] == 'Shear':
+        ax[i].plot(t, q_pred[i,:], label='Obtained Model')
+        ax[i].plot(t, q_true[i,:], label='From kinematic model')
+        ax[i].set_ylabel('$\sigma_{sh}$')
+        ax[i].set_xlim([0,0.5])
+        ax[i].grid(True)
+        ax[i].legend(loc='lower right')
+    else:
+        ax[i].plot(t, q_pred[i,:], label='Obtained Model')
+        ax[i].plot(t, q_true[i,:], label='From kinematic model')
+        ax[i].set_ylabel('$\sigma_{ax}$')
+        ax[i].set_xlim([0,0.5])
+        ax[i].grid(True)
+        ax[i].legend(loc='lower right')
+
+fig.set_size_inches(5, 5 / 1.618 )
+fig.tight_layout()
+plt.show()
+
+# np.save("./Source/Soft Robot/render_data/q_cv_task1.npy", q_true)
+np.save("./Source/Soft Robot/render_data/q_pred_task4_with_shear.npy", q_pred)
+
 
 # kinetic_energy_lambda = sympy.lambdify([*states_sym[:n_dof], *states_sym[n_dof:], *states_epsed_sym], kinetic_energy, 'jax')
 # potential_energy_lambda = sympy.lambdify([*states_sym[:n_dof], *states_sym[n_dof:], *states_epsed_sym], potential_energy, 'jax')

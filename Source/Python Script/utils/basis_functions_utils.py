@@ -129,7 +129,7 @@ def U_decomp(expr, xi_sym, params):
     monoms = [sympy.prod(x**k for x, k in zip(p.gens, mon)) for mon in p.monoms()]
     return coeffs, monoms
 
-def constructLagrangianExpression(sym_exps, states_sym, states_epsed_sym, xi_eq, B_xi, strain_selector, params):
+def constructLagrangianExpression(sym_exps, states_sym, states_epsed_sym, xi_eq, B_xi, strain_selector, params, epsilon_bend):
     true_coeffs = []
     expr = []
     num_segments = params['num_segments']
