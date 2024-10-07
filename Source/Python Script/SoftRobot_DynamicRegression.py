@@ -31,14 +31,14 @@ from utils.utils import compute_planar_stiffness_matrix, compute_strain_basis
 
 ####################################################################
 #### Soft manipulator parameters - change based on the use case ####
-num_segments = 2
-strain_selector = np.array([True, True, True, True, True, True]) # bending, shear and axial
-string_strains = ['Bending','Shear','Axial','Bending','Shear','Axial']
+num_segments = 1
+strain_selector = np.array([True, True, True]) # bending, shear and axial
+string_strains = ['Bending','Shear','Axial']
 
 epsilon_bend = 5e-2
 E_max = 1e8 
 G_max = 1e5
-G_max = 1e9
+# G_max = 1e9
 ####################################################################
 ## Compute additional parameters
 bending_map = [] # from the list of active states says which ones are bending state and which ones are not
@@ -57,52 +57,42 @@ strain_segments = [seg for seg in range(num_segments) for i in range(3)]
 # rootdir = "./Source/Soft Robot/ns-1_bending_axial/"
 # rootdir = "./Source/Soft Robot/ns-1_dof-3_stiff_shear_and_torques/"
 # rootdir = "./Source/Soft Robot/ns-1_dof-3_G_1e7_true_acc/"
-rootdir = "./Source/Soft Robot/ns-1_dof-3_G_1e6_torque_2_high_res/"
+# rootdir = "./Source/Soft Robot/ns-1_dof-3_G_1e6_torque_2_high_res/"
 # rootdir = "./Source/Soft Robot/ns-1_dof-3/"
 # rootdir = "./Source/Soft Robot/ns-1_dof-3_G_1e7_large_torque_larger_D/"
 # rootdir = "./Source/Soft Robot/ns-1_dof-3_high_shear_stiffness_true_acc/"
 # rootdir_true = "./Source/Soft Robot/ns-1_bending_axial_true/"
 # rootdir_true = "./Source/Soft Robot/ns-1_dof-3_stiff_shear_and_torques_true_acc/"
 # rootdir_true = "./Source/Soft Robot/ns-1_dof-3_G_1e6_true_acc/"
-rootdir_true = "./Source/Soft Robot/ns-1_dof-3_G_1e6_torque_2_high_res_true_acc/"
+# rootdir_true = "./Source/Soft Robot/ns-1_dof-3_G_1e6_torque_2_high_res_true_acc/"
 # rootdir_true = "./Source/Soft Robot/ns-1_dof-3_true/"
 # rootdir_true = "./Source/Soft Robot/ns-1_dof-3_G_1e7_large_torque_larger_D_true_acc/"
 # rootdir_2 = "./Source/Soft Robot/ns-1_dof-3_G_1e7_large_torque_true_acc/"
 
-rootdir = "./Source/Soft Robot/ns-2_dof-3_true/"
-rootdir_true = "./Source/Soft Robot/ns-2_dof-3_true/"
+# rootdir = "./Source/Soft Robot/final_results/ns-1_dof-3/training/cv/"
+# rootdir_true = "./Source/Soft Robot/final_results/ns-1_dof-3/training/true/"
+# rootdir_val = "./Source/Soft Robot/final_results/ns-1_dof-3/validation/step_actuation/"
+rootdir = "./Source/Soft Robot/ns-1_high_shear_stiffness/training/cv/"
+rootdir_true = "./Source/Soft Robot/ns-1_high_shear_stiffness/training/true/"
+rootdir_val = "./Source/Soft Robot/ns-1_high_shear_stiffness/validation/sinusoidal_actuation/"
 
-X_all = np.load(rootdir + "X.npy")
-Xdot_all = np.load(rootdir + "Xdot.npy")
-Tau_all = np.load(rootdir + "Tau.npy")
-X_all_true = np.load(rootdir_true + "X.npy")
-Xdot_all_true = np.load(rootdir_true + "Xdot.npy")
-Tau_all_true = np.load(rootdir_true + "Tau.npy")
+X = np.vstack(np.load(rootdir + "X.npy"))
+Xdot = np.vstack(np.load(rootdir + "Xdot.npy"))
+Tau = np.vstack(np.load(rootdir + "Tau.npy"))
+X_true = np.vstack(np.load(rootdir_true + "X.npy"))
+Xdot_true = np.vstack(np.load(rootdir_true + "Xdot.npy"))
+Tau_true = np.vstack(np.load(rootdir_true + "Tau.npy"))
 
-# X_all_2 = np.load(rootdir_2 + "X.npy")
-# Xdot_all_2 = np.load(rootdir_2 + "Xdot.npy")
+X_val_true = np.vstack(np.load(rootdir_val + "X_val.npy"))
+Xdot_val_true = np.vstack(np.load(rootdir_val + "Xdot_val.npy"))
+Tau_val_true = np.vstack(np.load(rootdir_val + "Tau_val.npy"))
 
-
-# Stack variables (from all initial conditions)
-X = np.vstack(X_all[:-1])
-Xdot = np.vstack(Xdot_all[:-1])
-Tau = np.vstack(Tau_all[:-1])
-X_true = np.vstack(X_all_true[:-1])
-Xdot_true = np.vstack(Xdot_all_true[:-1])
-Tau_true = np.vstack(Tau_all_true[:-1])
-
-# X_2 = np.vstack(X_all_2[:-1])
-# Xdot_2 = np.vstack(Xdot_all_2[:-1])
-
-# X[:,3:] = X_true[:,3:]
-# Xdot[:,3:] = Xdot_true[:,3:]
-
-X_val = np.array(X_all[-1])
-Xdot_val = np.array(Xdot_all[-1])
-Tau_val = np.array(Tau_all[-1])
-X_val_true = np.array(X_all_true[-1])
-Xdot_val_true = np.array(Xdot_all_true[-1])
-Tau_val_true = np.array(Tau_all_true[-1])
+# X_val = np.array(X_all[-1])
+# Xdot_val = np.array(Xdot_all[-1])
+# Tau_val = np.array(Tau_all[-1])
+# X_val_true = np.array(X_all_true[-1])
+# Xdot_val_true = np.array(Xdot_all_true[-1])
+# Tau_val_true = np.array(Tau_all_true[-1])
 
 # Tau = np.insert(Tau, [1], np.zeros((Tau.shape[0], 1)), axis=1)
 # Tau_val = np.insert(Tau_val, [1], np.zeros((Tau_val.shape[0], 1)), axis=1)
@@ -149,8 +139,8 @@ bending_indices = [i for i in range(len(bending_map)) if bending_map[i]==True]
 if bending_indices != []:
     mask = True
     for idx in bending_indices:
-        mask = mask & (np.abs(X[:,idx]) >= 5.0)
-        mask_true = mask & (np.abs(X_true[:,idx]) >= 5.0)
+        mask = mask & (np.abs(X[:,idx]) >= 3.0)
+        mask_true = mask & (np.abs(X_true[:,idx]) >= 3.0)
     X = X[mask]
     X_true = X_true[mask_true]
     Xdot = Xdot[mask]
@@ -445,11 +435,12 @@ while convergence == False:
         Xdot = np.delete(Xdot, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
         X_epsed = np.delete(X_epsed, neglect_strain_index[0], 1)
         Tau = np.delete(Tau, neglect_strain_index[0], 1)
-        X_val = np.delete(X_val, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
-        Xdot_val = np.delete(Xdot_val, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
-        Tau_val = np.delete(Tau_val, neglect_strain_index[0], 1)
+        # X_val = np.delete(X_val, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
+        # Xdot_val = np.delete(Xdot_val, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
+        # Tau_val = np.delete(Tau_val, neglect_strain_index[0], 1)
         X_val_true = np.delete(X_val_true, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
         Xdot_val_true = np.delete(Xdot_val_true, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
+        Tau_val_true = np.delete(Tau_val_true, neglect_strain_index[0], 1)
 
 
 # ------------------- Validation ---------------------------
@@ -477,8 +468,10 @@ def generate_data(func, time, init_values, Tau):
     indexes = np.unique(Tau[:,0], return_index=True)[1]
     tau_unique = [Tau[index,:] for index in sorted(indexes)]
 
-    for count, t in enumerate(time[::10]):
-        tau = Tau[count*10, :]
+    for count, t in enumerate(time[::10]): # for sinusoidal actuation
+    # for count, t in enumerate(time[::1000]): # for step actuation
+        tau = Tau[count*10, :] # for sinusoidal actuation
+        # tau = Tau[count*1000, :] # for step actuation
         # tau = tau_unique[count]
         
         if t==0:
@@ -486,24 +479,28 @@ def generate_data(func, time, init_values, Tau):
                 ODETerm(func),
                 solver=Tsit5(),
                 t0=time[0],
-                t1=time[::10][1],
+                t1=time[::10][1], # for sinusoidal actuation
+                # t1=time[::1000][1], # for step actuation
                 dt0=1e-5,
                 y0=init_values,
                 args=(tau, D.detach().cpu().numpy()),
                 max_steps=None,
-                saveat=SaveAt(ts=jnp.arange(0.0, time[::10][1]+dt, dt)),
+                saveat=SaveAt(ts=jnp.arange(0.0, time[::10][1]+dt, dt)), # for sinusoidal actuation
+                # saveat=SaveAt(ts=jnp.arange(0.0, time[::1000][1]+dt, dt)), # for step actuation
             )
         else:
             sol = diffeqsolve(
                 ODETerm(func),
                 solver=Tsit5(),
                 t0=time[0],
-                t1=time[::10][1],
+                t1=time[::10][1], # for sinusoidal actuation
+                # t1=time[::1000][1], # for step actuation
                 dt0=1e-5,
                 y0=sol_list[-1][-1],
                 args=(tau, D.detach().cpu().numpy()),
                 max_steps=None,
-                saveat=SaveAt(ts=jnp.arange(0.0, time[::10][1]+dt, dt)),
+                saveat=SaveAt(ts=jnp.arange(0.0, time[::10][1]+dt, dt)), # for sinusoidal actuation
+                # saveat=SaveAt(ts=jnp.arange(0.0, time[::1000][1]+dt, dt)), # for step actuation
             )
         
         sol_list.append(sol.ys[1:,:])
@@ -532,7 +529,7 @@ def softrobot(t,x,args):
     x_epsed_list = []
     for i in range(x.shape[0]//2):
         if bending_map[i] == True:
-            q_epsed = apply_eps_to_bend_strains_jnp(x_[i], 6e0)
+            q_epsed = apply_eps_to_bend_strains_jnp(x_[i], 5e0)
         else:
             q_epsed = x_[i]
         
@@ -549,38 +546,35 @@ def softrobot(t,x,args):
 q_tt_true = (Xdot_val_true[:,n_dof:].T).copy()
 q_t_true = (Xdot_val_true[:,:n_dof].T).copy()
 q_true = (X_val_true[:,:n_dof].T).copy()
+tau_true = (Tau_val_true.T).copy()
 
-# CV validation dataset
-q_tt_cv = (Xdot_val[:,n_dof:].T).copy()
-q_t_cv = (Xdot_val[:,:n_dof].T).copy()
-q_cv = (X_val[:,:n_dof].T).copy()
-tau_true = (Tau_val.T).copy()
+# # CV validation dataset
+# q_tt_cv = (Xdot_val[:,n_dof:].T).copy()
+# q_t_cv = (Xdot_val[:,:n_dof].T).copy()
+# q_cv = (X_val[:,:n_dof].T).copy()
+# tau_true = (Tau_val.T).copy()
 
 # prediction results
 dt = 1e-3  # time step
-time_ = jnp.arange(0.0, 0.5, dt)
-y_0 = X_val[0,:]
-Xpred, Xdotpred = generate_data(softrobot, time_, y_0, Tau_val)
+time_ = jnp.arange(0.0, 7.0, dt)
+y_0 = X_val_true[0,:]
+Xpred, Xdotpred = generate_data(softrobot, time_, y_0, Tau_val_true)
 
 q_tt_pred = Xdotpred[:,n_dof:].T
 q_t_pred = Xdotpred[:,:n_dof].T
 q_pred = Xpred[:,:n_dof].T
 
-save = True
-if save==True:
-    np.save("./Source/Soft Robot/render_data/Xpred.npy" , Xpred)
-
 # Validation loss
-X_epsed_val = np.zeros((X_val.shape[0], n_dof))
+X_epsed_val_true = np.zeros((X_val_true.shape[0], n_dof))
 for i in range(n_dof):
     if bending_map[i] == True:
-        q_epsed = apply_eps_to_bend_strains(X_val[:,i], 3e0)
+        q_epsed = apply_eps_to_bend_strains(X_val_true[:,i], 3e0)
     else:
-        q_epsed = X_val[:,i]
+        q_epsed = X_val_true[:,i]
     
-    X_epsed_val[:,i] = q_epsed
+    X_epsed_val_true[:,i] = q_epsed
 
-tau_pred = compute_batch_tau(inverse_dynamics_expr_lambda, X_val, Xdot_val, X_epsed_val)
+tau_pred = compute_batch_tau(inverse_dynamics_expr_lambda, X_val_true, Xdot_val_true, X_epsed_val_true)
 lossval = loss(torch.from_numpy(np.asarray(tau_pred.T).copy()), torch.from_numpy(tau_true))
 print('\nValidation loss:')
 print(lossval)
@@ -609,14 +603,16 @@ for i in range(n_dof):
     # ax[0].plot(t, q_tt_cv[i,:], label='CV Data')
     ax[0].plot(t, q_tt_pred[i,:], 'r--',label='Simulated Predicted Model')
     ax[0].set_ylabel('$\ddot{q}$')
-    ax[0].set_xlim([0,0.5])
+    # ax[0].set_xlim([0,0.5])
+    ax[0].set_xlim([0, 7.0])
     ax[0].grid(True)
 
     ax[1].plot(t, q_t_true[i,:], label='GT Data')
     # ax[1].plot(t, q_t_cv[i,:], label='CV Data')
     ax[1].plot(t, q_t_pred[i,:], 'r--',label='Simulated Predicted Model')
     ax[1].set_ylabel('$\dot{q}$')
-    ax[1].set_xlim([0,0.5])
+    # ax[1].set_xlim([0,0.5])
+    ax[1].set_xlim([0, 7.0])
     ax[1].grid(True)
 
     ax[2].plot(t, q_true[i,:], label='GT Data')
@@ -624,7 +620,8 @@ for i in range(n_dof):
     ax[2].plot(t, q_pred[i,:], 'r--',label='Simulated Predicted Model')
     ax[2].set_xlabel('Time (s)')
     ax[2].set_ylabel('$q$')
-    ax[2].set_xlim([0,0.5])
+    # ax[2].set_xlim([0, 0.5])
+    ax[2].set_xlim([0, 7.0])
     ax[2].grid(True)
     ax[2].legend(loc="upper right")
 
@@ -641,30 +638,34 @@ for i in range(n_dof):
         ax[i].plot(t, q_pred[i,:], label='Obtained Model')
         ax[i].plot(t, q_true[i,:], label='From kinematic model')
         ax[i].set_ylabel('$\kappa_{be}$')
-        ax[i].set_xlim([0,0.5])
+        # ax[i].set_xlim([0,0.5])
+        ax[i].set_xlim([0, 7.0])
         ax[i].grid(True)
         ax[i].legend(loc='lower right')
     elif string_strains[i] == 'Shear':
         ax[i].plot(t, q_pred[i,:], label='Obtained Model')
         ax[i].plot(t, q_true[i,:], label='From kinematic model')
         ax[i].set_ylabel('$\sigma_{sh}$')
-        ax[i].set_xlim([0,0.5])
+        # ax[i].set_xlim([0,0.5])
+        ax[i].set_xlim([0, 7.0])
         ax[i].grid(True)
-        ax[i].legend(loc='lower right')
+        ax[i].legend(loc='upper right')
     else:
         ax[i].plot(t, q_pred[i,:], label='Obtained Model')
         ax[i].plot(t, q_true[i,:], label='From kinematic model')
         ax[i].set_ylabel('$\sigma_{ax}$')
-        ax[i].set_xlim([0,0.5])
+        # ax[i].set_xlim([0,0.5])
+        ax[i].set_xlim([0, 7.0])
         ax[i].grid(True)
-        ax[i].legend(loc='lower right')
+        ax[i].legend(loc='upper right')
 
 fig.set_size_inches(5, 5 / 1.618 )
 fig.tight_layout()
 plt.show()
 
-# np.save("./Source/Soft Robot/render_data/q_cv_task1.npy", q_true)
-np.save("./Source/Soft Robot/render_data/q_pred_task4_with_shear.npy", q_pred)
+np.save(f"./Source/Soft Robot/render_data/ns-{num_segments}_q_true.npy", q_true)
+np.save(f"./Source/Soft Robot/render_data/ns-{num_segments}_q_pred.npy", q_pred)
+# np.save(f"./Source/Soft Robot/render_data/q_pred_task4_with_shear.npy", q_pred)
 
 
 # kinetic_energy_lambda = sympy.lambdify([*states_sym[:n_dof], *states_sym[n_dof:], *states_epsed_sym], kinetic_energy, 'jax')

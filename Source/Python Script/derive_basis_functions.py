@@ -46,7 +46,7 @@ params = {
     # "G": jnp.array([1e3, 3e3]),
     # "D": 5e-6 * jnp.diag(jnp.array([1e0, 1e7, 8e3])),
     # "D": 5e-6 * jnp.diag(jnp.array([1e0, 8e3, 1e4])),
-    "D": 5e-6 * jnp.diag(jnp.array([1e0, 3e4, 3e4])),
+    "D": 5e-6 * jnp.diag(jnp.array([2e0, 3e4, 3e4])),
     # "D": 5e-6 * jnp.diag(jnp.array([3e0, 1e5, 1e4, 3e0, 1e3, 1e4])),
     # "D": 5e-6 * jnp.diag(jnp.array([6e0, 1e5, 1e4, 6e0, 5e3, 1e4])),
     "num_segments": num_segments
