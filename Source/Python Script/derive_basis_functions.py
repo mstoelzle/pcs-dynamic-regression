@@ -28,27 +28,29 @@ compute_stiffness_matrix_for_all_segments_fn = vmap(
 
 ####################################################################
 #### Soft manipulator parameters - change based on the use case ####
-num_segments = 1
-strain_selector = np.array([True, True, True]) # bending, shear and axial
+num_segments = 2
+strain_selector = np.array([True, True, True, True, True, True]) # bending, shear and axial
 epsilon_bend = 5e-2
 
 params = {
     "th0": jnp.array(0.0),  # initial orientation angle [rad]
     "l": 1e-1 * jnp.ones((num_segments,)),
-    # "l": jnp.array([7e-2, 1e-1]),
+    "l": jnp.array([7e-2, 1e-1]),
     "r": 2e-2 * jnp.ones((num_segments,)),
     "rho": 1070 * jnp.ones((num_segments,)),
-    # "rho": jnp.array([1070, 1049]),
+    "rho": jnp.array([1070, 1049]),
     "g": jnp.array([0.0, 9.81]), 
     "E": 1e4 * jnp.ones((num_segments,)),  # Elastic modulus [Pa] # for bending
-    # "E": jnp.array([1e4, 5e4]),
-    "G": 1e3 * jnp.ones((num_segments,)),  # Shear modulus [Pa]
-    # "G": jnp.array([1e3, 3e3]),
+    "E": jnp.array([1e4, 9e3]),
+    # "G": 1e3 * jnp.ones((num_segments,)),  # Shear modulus [Pa]
+    # "G": 1e6 * jnp.ones((num_segments,)),  # Shear modulus [Pa]
+    "G": jnp.array([1e3, 3e3]),
     # "D": 5e-6 * jnp.diag(jnp.array([1e0, 1e7, 8e3])),
     # "D": 5e-6 * jnp.diag(jnp.array([1e0, 8e3, 1e4])),
     "D": 5e-6 * jnp.diag(jnp.array([2e0, 3e4, 3e4])),
+    "D": 5e-6 * jnp.diag(jnp.array([2e0, 1e6, 3e4])),
     # "D": 5e-6 * jnp.diag(jnp.array([3e0, 1e5, 1e4, 3e0, 1e3, 1e4])),
-    # "D": 5e-6 * jnp.diag(jnp.array([6e0, 1e5, 1e4, 6e0, 5e3, 1e4])),
+    "D": 5e-6 * jnp.diag(jnp.array([6e0, 1e5, 1e4, 6e0, 5e3, 1e4])),
     "num_segments": num_segments
 }
 ####################################################################
