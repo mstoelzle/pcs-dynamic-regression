@@ -251,13 +251,10 @@ if __name__ == '__main__':
 
         # define the time sequence
         ts_i = jnp.arange(t0_i, t1_i, dt)
-        print("t0_i: ", t0_i, "t1_i: ", t1_i, "ts_i: ", t0_i + save_ts)
 
         y_ts_i = rollout_closed_loop_system(t0_i, q_des)
-        print("before trim: y_ts_i: ", y_ts_i.shape)
         y_ts.append(y_ts_i)
         q_des_ts.append(jnp.tile(q_des[None, :], (y_ts_i.shape[0], 1)))
-        print("appended", jnp.tile(q_des[None, :], (y_ts_i.shape[0], 1)).shape)
         q_d_des_ts.append(jnp.tile(q_d_des[None, :], (y_ts_i.shape[0], 1)))
 
         # update the time and the initial condition
@@ -268,7 +265,6 @@ if __name__ == '__main__':
     y_ts = jnp.concatenate(y_ts, axis=0)
     q_des_ts = jnp.concatenate(q_des_ts, axis=0)
     q_d_des_ts = jnp.concatenate(q_d_des_ts, axis=0)
-    print("y_ts: ", y_ts.shape, "q_des_ts: ", q_des_ts.shape, "q_d_des_ts: ", q_d_des_ts.shape)
 
     q_ts = y_ts[:, :n_q_gt]
     q_d_ts = y_ts[:, n_q_gt:2*n_q_gt]
