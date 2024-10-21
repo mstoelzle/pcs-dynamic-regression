@@ -10,6 +10,7 @@ from jax import numpy as jnp
 from jax import Array, lax, vmap, jit
 import numpy as onp
 from pathlib import Path
+from typing import Dict, Tuple
 
 num_segments = 1
 model_dir = Path("./Source/Soft Robot/ns-1_high_shear_stiffness/model")
@@ -39,7 +40,7 @@ q_d_des = jnp.zeros_like(q_des)
 
 # define the control gains
 Kp = 1e-2 * jnp.diag(jnp.array([1.0, 1e-2]))
-Ki = 1e0 * jnp.diag(jnp.array([1.0, 1e-2]))
+Ki = 1e-2 * jnp.diag(jnp.array([1.0, 1e-2]))
 Kd = 1e-3 * jnp.diag(jnp.array([1.0, 1e-2]))
 
 
@@ -96,20 +97,26 @@ def ode_hat_fn(t: Array, x: Array, tau: Array) -> Array:
 
     return x_d
 
-def closed_loop_control_ode_fn(
+def control_fn(
     t: Array, 
-    x: Array, 
-    args, 
+    y: Array, 
     q_des: Array,
     q_d_des: Array,
     Kp: Array,
     Ki: Array,
-    Kd: Array
-) -> Array:
-    # extract the system state
+    Kd: Array,
+    gamma: float = 1e0
+) -> Tuple[Array, Array]:
+    # extract the system state and integral error
+    x = y[:-n_q_hat]
     q, q_d = jnp.split(x, 2)
+    e_int = y[-n_q_hat:]
+
     # the observed configuration
     q_hat, q_d_hat = q[::2], q_d[::2]
+
+    # compute the error
+    e_q = q_des - q_hat
 
     # compute the feedforward term
     q_des_epsed = apply_eps_to_configuration(q_des, eps=5e0)
@@ -117,20 +124,32 @@ def closed_loop_control_ode_fn(
     tau_ff = K
 
     # compute the feedback term
-    tau_fb = Kp @ (q_des - q_hat) + Kd @ (q_d_des - q_d_hat)
+    tau_fb = Kp @ e_q + Ki @ e_int + Kd @ (q_d_des - q_d_hat)
 
     # compute the control input
     tau = tau_ff + tau_fb
     tau = jnp.concat([tau[0:1], jnp.zeros((1, )), tau[1:]])
 
-    # q_des, q_d_des = jnp.zeros((3, )), jnp.zeros((3, ))
-    # q_des_epsed = apply_eps_to_configuration(q_des, eps=2e-1)
-    # tau = -true_model["delta_expr_lambda"](*q_des, *q_d_des, *q_des_epsed)[:,0]
+    # infitesimal change in the integral error
+    delta_e_int = jnp.tanh(gamma * e_q)
+
+    return tau, delta_e_int
+
+def closed_loop_control_ode_fn(
+    t: Array, 
+    y: Array, 
+    args, 
+    **control_kwargs: Dict[str, Array]
+) -> Array:
+    # compute the control input
+    tau, delta_e_int = control_fn(t, y, **control_kwargs)
 
     # compute the state derivative of the ground truth model
-    x_d = ode_gt_fn(t, x, tau)
+    x_d = ode_gt_fn(t, y[:-n_q_hat], tau)
 
-    return x_d
+    y_d = jnp.concatenate([x_d, delta_e_int])
+
+    return y_d
 
 
 if __name__ == '__main__':
@@ -147,13 +166,19 @@ if __name__ == '__main__':
         Kd=Kd
     )))
 
+    # initialize integral error
+    e_int0 = jnp.zeros((n_q_hat, ))
+
+    # initialize the state
+    y0 = jnp.concatenate([x0, e_int0])
+
     sol = diffeqsolve(
         ode_term, 
         Tsit5(), 
         t0, 
         t1,
         dt,
-        x0, 
+        y0, 
         # args=jnp.zeros_like(q0),
         saveat=SaveAt(ts=ts),
         max_steps=None
