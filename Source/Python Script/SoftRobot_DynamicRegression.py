@@ -25,6 +25,7 @@ config.update('jax_platform_name', 'cpu')
 # plt.rc('xtick', labelsize=10)
 # plt.rc('ytick', labelsize=10)
 # plt.rc('axes', labelsize=10)
+from pathlib import Path
 
 from utils.math_utils import blk_diag
 from utils.utils import compute_planar_stiffness_matrix, compute_strain_basis
@@ -75,6 +76,7 @@ strain_segments = [seg for seg in range(num_segments) for i in range(3)]
 rootdir = "./Source/Soft Robot/ns-1_high_shear_stiffness/training/cv/"
 rootdir_true = "./Source/Soft Robot/ns-1_high_shear_stiffness/training/true/"
 rootdir_val = "./Source/Soft Robot/ns-1_high_shear_stiffness/validation/sinusoidal_actuation/"
+model_dir = "./Source/Soft Robot/ns-1_high_shear_stiffness/model/"
 
 X = np.vstack(np.load(rootdir + "X.npy"))
 Xdot = np.vstack(np.load(rootdir + "Xdot.npy"))
@@ -241,6 +243,16 @@ phi_qdot2 = expr_basis_fcns['phi_qdot2']
 phi_qdotq = expr_basis_fcns['phi_qdotq']
 params = expr_basis_fcns['params']
 B_xi = expr_basis_fcns['B_xi']
+
+# set the true model parameters and basis functions
+true_n_dof = n_dof
+true_states_sym, true_states_epsed_sym = states_sym, states_epsed_sym
+# true_xi_L = true_coeffs_before_norm[:-n_dof]
+# true_D = np.diag(true_coeffs_before_norm[-n_dof:])
+true_xi_L = true_coeffs_before_norm
+true_D = params["D"]
+true_phi_q, true_phi_qdot2, true_phi_qdotq = phi_q, phi_qdot2, phi_qdotq
+# true_phi_q, true_phi_qdot2, true_phi_qdotq = EulerLagrangeExpressionTensor(Lagr_expr, states, states_epsed_sym)
 
 convergence = False
 count = 0
@@ -445,7 +457,9 @@ while convergence == False:
 
 # ------------------- Validation ---------------------------
 # obtain the terms of the Euler-Lagrange EoM
-def getEOM(xi_Lcpu, phi_q, phi_qdot2, phi_qdotq):
+def getEOM(n_dof: int, states_sym, states_epsed_sym, xi_Lcpu, phi_q, phi_qdot2, phi_qdotq):
+    print("n_dof: ", n_dof)
+    print("xi_Lcpu: ", xi_Lcpu.shape, xi_Lcpu)
 
     delta_expr = sympy.Matrix(phi_q) @ sympy.Matrix(xi_Lcpu)
     eta_expr = (sympy.Matrix(phi_qdotq.reshape(n_dof*n_dof, -1)) @ sympy.Matrix(xi_Lcpu)).reshape(n_dof, n_dof)
@@ -457,7 +471,37 @@ def getEOM(xi_Lcpu, phi_q, phi_qdot2, phi_qdotq):
 
     return delta_expr_lambda, eta_expr_lambda, zeta_expr_lambda
 
-delta_expr_lambda, eta_expr_lambda, zeta_expr_lambda = getEOM(xi_L.detach().cpu().numpy(), phi_q, phi_qdot2, phi_qdotq)
+# construct lambda functions for the learned model
+print('Constructing lambda functions for the learned model...')
+delta_expr_lambda, eta_expr_lambda, zeta_expr_lambda = getEOM(n_dof, states_sym, states_epsed_sym, xi_L.detach().cpu().numpy(), phi_q, phi_qdot2, phi_qdotq)
+# construct lambda functions for the true model
+print('Constructing lambda functions for the true model...')
+true_delta_expr_lambda, true_eta_expr_lambda, true_zeta_expr_lambda = getEOM(true_n_dof, true_states_sym, true_states_epsed_sym,  true_xi_L, true_phi_q, true_phi_qdot2, true_phi_qdotq)
+
+# save the learned model
+print('Saving the model...')
+Path(model_dir).mkdir(parents=True, exist_ok=True)
+with open(model_dir + "learned_model.dill", 'wb') as f:
+    dill.dump({
+        'xi_L': xi_L.detach().cpu().numpy(),
+        'D': D.detach().cpu().numpy(),
+        'states_sym': states_sym,
+        'states_epsed_sym': states_epsed_sym,
+        'delta_expr_lambda': delta_expr_lambda,
+        'eta_expr_lambda': eta_expr_lambda,
+        'zeta_expr_lambda': zeta_expr_lambda,
+    }, f)
+with open(model_dir + "true_model.dill", 'wb') as f:
+    dill.dump({
+        'xi_L': true_xi_L,
+        'D': true_D,
+        'states_sym': true_states_sym,
+        'states_epsed_sym': true_states_epsed_sym,
+        'delta_expr_lambda': true_delta_expr_lambda,
+        'eta_expr_lambda': true_eta_expr_lambda,
+        'zeta_expr_lambda': true_zeta_expr_lambda,
+        'params': params,
+    }, f)
 
 def generate_data(func, time, init_values, Tau):
     # sol = solve_ivp(func,[time[0],time[-1]],init_values,t_eval=time,method='RK45',rtol=1e-10,atol=1e-10)
