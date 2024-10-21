@@ -48,7 +48,7 @@ x0 = jnp.concatenate([q0, q_d0])
 # q_des = jnp.array([-10.0, 0.0])
 # q_des = jnp.zeros((n_q_hat, ))
 # q_d_des = jnp.zeros_like(q_des)
-num_setpoints = 2
+num_setpoints = 7
 sim_duration_per_setpoint = 5.0  # s
 
 # define the time step
@@ -180,7 +180,7 @@ def closed_loop_control_ode_fn(
 
 if __name__ == '__main__':
     # use diffrax to solve the ODE
-    ts = jnp.arange(t0, t1, dt)
+    ts = jnp.arange(t0, t1 + dt, dt)
 
     # define the setpointn sequence
     rng_setpoint = random.PRNGKey(seed=1)
@@ -191,18 +191,7 @@ if __name__ == '__main__':
     q_des_ps = q_des_ps * jnp.array([
         40.0, 0.1, 0.2, 10.0, 0.1, 0.2
     ])
-    q_des_ts = q_des_ps.repeat(int(sim_duration_per_setpoint / dt), axis=0)
-    q_d_des_ts = jnp.zeros_like(q_des_ts)
-
-    # plot the setpoints
-    fig, ax = plt.subplots(1, 1)
-    for i in range(q_des_ts.shape[-1]):
-        ax.plot(ts, q_des_ts[:, i], label=r"$q_" + str(i+1) + "$")
-    ax.set_xlabel("Time [s]")
-    ax.set_ylabel(r"Setpoint $q^\mathrm{d}$")
-    ax.grid(True)
-    ax.legend()
-    plt.show()
+    q_d_des_ps = jnp.zeros_like(q_des_ps)
 
     # define the control kwargs
     control_kwargs = dict(
@@ -222,47 +211,65 @@ if __name__ == '__main__':
     # define the solver
     ode_solver = Tsit5()
 
+
+    save_ts = jnp.arange(dt, sim_duration_per_setpoint + dt, dt)
+
+    @jit
+    def rollout_closed_loop_system(t0: Array, q_des: Array) -> Array:
+        # solve the ODE
+        sol = diffeqsolve(
+            ode_term, 
+            ode_solver, 
+            t0, 
+            t0 + sim_duration_per_setpoint + dt,
+            sim_dt,
+            y0_i,
+            args=(q_des, ),
+            # args=jnp.zeros_like(q0),
+            saveat=SaveAt(ts=t0 + save_ts),
+            max_steps=None
+        )
+
+        return sol.ys
+
     # initialize integral error
     e_int0 = jnp.zeros((n_q_hat, ))
 
     # initialize the state
     y0 = jnp.concatenate([x0, e_int0])
 
-    y_ts = []
+    y_ts = [y0[None, :]]
+    q_des_ts = [q_des_ps[0:1]]
+    q_d_des_ts = [q_d_des_ps[0:1]]
+
     t0_i = t0
     t1_i = t0_i + sim_duration_per_setpoint
     y0_i = y0
     for setpoint_idx in tqdm(range(num_setpoints)):
         q_des = q_des_ps[setpoint_idx]
-        q_d_des = jnp.zeros_like(q_des)
+        q_d_des = q_d_des_ps[setpoint_idx]
 
         # define the time sequence
         ts_i = jnp.arange(t0_i, t1_i, dt)
-        print("t0_i: ", t0_i, "t1_i: ", t1_i, "ts_i: ", ts_i)
+        print("t0_i: ", t0_i, "t1_i: ", t1_i, "ts_i: ", t0_i + save_ts)
 
-        # solve the ODE
-        sol = diffeqsolve(
-            ode_term, 
-            ode_solver, 
-            ts_i[0], 
-            ts_i[-1],
-            sim_dt,
-            y0_i,
-            args=(q_des, ),
-            # args=jnp.zeros_like(q0),
-            saveat=SaveAt(ts=ts_i),
-            max_steps=None
-        )
-
-        y_ts_i = sol.ys if setpoint_idx == 0 else sol.ys[1:]
+        y_ts_i = rollout_closed_loop_system(t0_i, q_des)
+        print("before trim: y_ts_i: ", y_ts_i.shape)
         y_ts.append(y_ts_i)
+        q_des_ts.append(jnp.tile(q_des[None, :], (y_ts_i.shape[0], 1)))
+        print("appended", jnp.tile(q_des[None, :], (y_ts_i.shape[0], 1)).shape)
+        q_d_des_ts.append(jnp.tile(q_d_des[None, :], (y_ts_i.shape[0], 1)))
 
         # update the time and the initial condition
-        t0_i = t1_i - dt
-        t1_i = t0_i + dt + sim_duration_per_setpoint
-        y0_i = sol.ys[-1]
+        t0_i = t1_i
+        t1_i = t1_i + sim_duration_per_setpoint
+        y0_i = y_ts_i[-1]
 
     y_ts = jnp.concatenate(y_ts, axis=0)
+    q_des_ts = jnp.concatenate(q_des_ts, axis=0)
+    q_d_des_ts = jnp.concatenate(q_d_des_ts, axis=0)
+    print("y_ts: ", y_ts.shape, "q_des_ts: ", q_des_ts.shape, "q_d_des_ts: ", q_d_des_ts.shape)
+
     q_ts = y_ts[:, :n_q_gt]
     q_d_ts = y_ts[:, n_q_gt:2*n_q_gt]
     e_int_ts = y_ts[:, -n_q_hat:]
