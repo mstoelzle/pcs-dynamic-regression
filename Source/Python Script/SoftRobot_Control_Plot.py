@@ -33,8 +33,8 @@ if __name__ == "__main__":
     # plot the bending strains
     fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
     # plot the reference trajectory
-    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 0], linewidth=3.0, linestyle=':', label=r"$\kappa_{\mathrm{be},1}^\mathrm{d}$")
-    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 3], linewidth=3.0, linestyle=':', label=r"$\kappa_{\mathrm{be},2}^\mathrm{d}$")
+    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 0], linewidth=3.5, linestyle=':', label=r"$\kappa_{\mathrm{be},1}^\mathrm{d}$")
+    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 3], linewidth=3.5, linestyle=':', label=r"$\kappa_{\mathrm{be},2}^\mathrm{d}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the actual trajectory
@@ -52,11 +52,11 @@ if __name__ == "__main__":
     # plot the axial and shear strains
     fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
     # plot the reference trajectory for the shear strains
-    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 1], linewidth=3.0, linestyle=':', label=r"$\sigma_{\mathrm{sh},1}^\mathrm{d}$")
-    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 4], linewidth=3.0, linestyle=':', label=r"$\sigma_{\mathrm{sh},2}^\mathrm{d}$")
+    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 1], linewidth=3.5, linestyle=':', label=r"$\sigma_{\mathrm{sh},1}^\mathrm{d}$")
+    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 4], linewidth=3.5, linestyle=':', label=r"$\sigma_{\mathrm{sh},2}^\mathrm{d}$")
     # plot the reference trajectory for the axial strains
-    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 2], linewidth=3.0, linestyle=':', label=r"$\sigma_{\mathrm{ax},1}^\mathrm{d}$")
-    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 5], linewidth=3.0, linestyle=':', label=r"$\sigma_{\mathrm{ax},2}^\mathrm{d}$")
+    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 2], linewidth=3.5, linestyle=':', label=r"$\sigma_{\mathrm{ax},1}^\mathrm{d}$")
+    ax.plot(sim_ts['ts'], sim_ts['q_des_ts'][:, 5], linewidth=3.5, linestyle=':', label=r"$\sigma_{\mathrm{ax},2}^\mathrm{d}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the actual trajectory for the shear strains
@@ -91,12 +91,12 @@ if __name__ == "__main__":
     fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
     # plot the feedforward control signal
     for i in range(sim_ts["tau_ff_ts"].shape[-1]):
-        ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, i], marker="o", ms=5, markevery=10, label=r"$\tau_\mathrm{ff}^{" + str(i+1) + "}$")
+        ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, i], marker="o", ms=5, markevery=100, label=r"$\tau_\mathrm{ff}^{" + str(i+1) + "}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the feedback control signal
     for i in range(sim_ts["tau_fb_ts"].shape[-1]):
-        ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, i], marker="v", ms=5, markevery=10, label=r"$\tau_\mathrm{fb}^{" + str(i+1) + "}$")
+        ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, i], marker="v", ms=5, markevery=100, label=r"$\tau_\mathrm{fb}^{" + str(i+1) + "}$")
     ax.set_xlabel(r"Time $t$ [s]")
     ax.set_ylabel(r"Control signal $\tau$")
     ax.legend()
@@ -109,13 +109,13 @@ if __name__ == "__main__":
     # plot the the bending control signal
     fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
     # plot the feedforward control signal
-    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, i], marker="o", ms=5, markevery=10, label=r"$\tau_\mathrm{ff,1}$")
-    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, 3], marker="o", ms=5, markevery=10, label=r"$\tau_\mathrm{ff,2}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, i], marker="o", ms=5, markevery=100, label=r"$\tau_\mathrm{ff,1}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, 3], marker="o", ms=5, markevery=100, label=r"$\tau_\mathrm{ff,2}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the feedback control signal
-    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 0], marker="v", ms=5, markevery=10, label=r"$\tau_{\mathrm{fb},1}$")
-    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 3], marker="v", ms=5, markevery=10, label=r"$\tau_{\mathrm{fb},2}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 0], marker="v", ms=5, markevery=100, label=r"$\tau_{\mathrm{fb},1}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 3], marker="v", ms=5, markevery=100, label=r"$\tau_{\mathrm{fb},2}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the total control signal
@@ -133,13 +133,13 @@ if __name__ == "__main__":
     # plot the shear control signal
     fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
     # plot the feedforward control signal
-    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, 1], marker="o", ms=5, markevery=10, label=r"$\tau_\mathrm{ff,1}$")
-    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, 4], marker="o", ms=5, markevery=10, label=r"$\tau_\mathrm{ff,2}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, 1], marker="o", ms=5, markevery=100, label=r"$\tau_\mathrm{ff,1}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, 4], marker="o", ms=5, markevery=100, label=r"$\tau_\mathrm{ff,2}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the feedback control signal
-    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 1], marker="v", ms=5, markevery=10, label=r"$\tau_{\mathrm{fb},1}$")
-    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 4], marker="v", ms=5, markevery=10, label=r"$\tau_{\mathrm{fb},2}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 1], marker="v", ms=5, markevery=100, label=r"$\tau_{\mathrm{fb},1}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 4], marker="v", ms=5, markevery=100, label=r"$\tau_{\mathrm{fb},2}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the total control signal
@@ -157,13 +157,13 @@ if __name__ == "__main__":
     # plot the axial control signal
     fig, ax = plt.subplots(1, 1, figsize=figsize, dpi=dpi)
     # plot the feedforward control signal
-    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, 2], marker="o", ms=5, markevery=10, label=r"$\tau_\mathrm{ff,1}$")
-    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, 5], marker="o", ms=5, markevery=10, label=r"$\tau_\mathrm{ff,2}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, 2], marker="o", ms=5, markevery=100, label=r"$\tau_\mathrm{ff,1}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_ff_ts"][:, 5], marker="o", ms=5, markevery=100, label=r"$\tau_\mathrm{ff,2}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the feedback control signal
-    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 2], marker="v", ms=5, markevery=10, label=r"$\tau_{\mathrm{fb},1}$")
-    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 5], marker="v", ms=5, markevery=10, label=r"$\tau_{\mathrm{fb},2}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 2], marker="v", ms=5, markevery=100, label=r"$\tau_{\mathrm{fb},1}$")
+    ax.plot(sim_ts["ts"], sim_ts["tau_fb_ts"][:, 5], marker="v", ms=5, markevery=100, label=r"$\tau_{\mathrm{fb},2}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the total control signal
