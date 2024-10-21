@@ -58,11 +58,11 @@ t0 = 0.0
 t1 = num_setpoints * sim_duration_per_setpoint
 
 # define the control gains
-K_diag = jnp.diag(jnp.array([1.0, 1e-2, 1e-2, 1.0, 1e-2, 1e-2]))
-Kp = 1e-2 * K_diag
-Ki = 1e-2 * K_diag
-Kd = 1e-3 * K_diag
-gamma = 1e0 * K_diag
+K_diag = jnp.diag(jnp.array([1e-1, 5e-1, 1e1, 1e-1, 5e-1, 1e1]))
+Kp = 1e-1 * K_diag
+Ki = 2e0 * K_diag
+Kd = 1e-2 * K_diag
+gamma = 1e0 * jnp.diag(jnp.array([40.0, 0.1, 0.2, 40.0, 0.1, 0.2]))
 
 
 def apply_eps_to_bend_strains(q_bend: Array, eps: float = 1e-3):
@@ -127,7 +127,7 @@ def control_fn(
     Ki: Array,
     Kd: Array,
     gamma: float = 1e0
-) -> Tuple[Array, Array]:
+) -> Tuple[Array, Dict[str, Array]]:
     # extract the system state and integral error
     x = y[:-n_q_hat]
     q, q_d = jnp.split(x, 2)
@@ -153,7 +153,13 @@ def control_fn(
     # infitesimal change in the integral error
     delta_e_int = jnp.tanh(gamma @ e_q)
 
-    return tau, delta_e_int
+    aux = dict(
+        tau_ff=tau_ff,
+        tau_fb=tau_fb,
+        delta_e_int=delta_e_int
+    )
+
+    return tau, aux
 
 def closed_loop_control_ode_fn(
     t: Array, 
@@ -162,12 +168,12 @@ def closed_loop_control_ode_fn(
     **control_kwargs: Dict[str, Array]
 ) -> Array:
     # compute the control input
-    tau, delta_e_int = control_fn(t, y, *control_args, **control_kwargs)
+    tau, control_aux = control_fn(t, y, *control_args, **control_kwargs)
 
     # compute the state derivative of the ground truth model
     x_d = ode_gt_fn(t, y[:-n_q_hat], tau)
 
-    y_d = jnp.concatenate([x_d, delta_e_int])
+    y_d = jnp.concatenate([x_d, control_aux["delta_e_int"]])
 
     return y_d
 
@@ -190,8 +196,8 @@ if __name__ == '__main__':
 
     # plot the setpoints
     fig, ax = plt.subplots(1, 1)
-    for setpoint_idx in range(n_q_hat):
-        ax.plot(ts, q_des_ts[:, setpoint_idx], label=r"$q_" + str(setpoint_idx+1) + "$")
+    for i in range(q_des_ts.shape[-1]):
+        ax.plot(ts, q_des_ts[:, i], label=r"$q_" + str(i+1) + "$")
     ax.set_xlabel("Time [s]")
     ax.set_ylabel(r"Setpoint $q^\mathrm{d}$")
     ax.grid(True)
@@ -232,13 +238,14 @@ if __name__ == '__main__':
 
         # define the time sequence
         ts_i = jnp.arange(t0_i, t1_i, dt)
+        print("t0_i: ", t0_i, "t1_i: ", t1_i, "ts_i: ", ts_i)
 
         # solve the ODE
         sol = diffeqsolve(
             ode_term, 
             ode_solver, 
-            t0_i, 
-            t1_i,
+            ts_i[0], 
+            ts_i[-1],
             sim_dt,
             y0_i,
             args=(q_des, ),
@@ -261,7 +268,7 @@ if __name__ == '__main__':
     e_int_ts = y_ts[:, -n_q_hat:]
 
     # define the control function to reconstruct the control input
-    tau_ts, _ = vmap(partial(control_fn, **control_kwargs))(ts, y_ts, q_des_ts)
+    tau_ts, control_aux_ts = vmap(partial(control_fn, **control_kwargs))(ts, y_ts, q_des_ts)
 
     # save the results
     sim_ts = dict(
@@ -271,7 +278,9 @@ if __name__ == '__main__':
         q_des_ts=q_des_ts,
         q_d_des_ts=q_d_des_ts,
         e_int_ts=e_int_ts,
-        tau_ts=tau_ts
+        tau_ts=tau_ts,
+        tau_ff_ts=control_aux_ts["tau_ff"],
+        tau_fb_ts=control_aux_ts["tau_fb"],
     )
     control_dir = model_dir.parent / "control"
     control_dir.mkdir(parents=True, exist_ok=True)
