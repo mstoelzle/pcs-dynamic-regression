@@ -36,7 +36,7 @@ strain_selector = np.array([True, True, True, True, True, True]) # bending, shea
 string_strains = ['Bending','Shear','Axial','Bending','Shear','Axial']
 
 epsilon_bend = 5e-2
-E_max = 1e8 
+E_max = 1e7
 G_max = 1e5
 # G_max = 1e9
 ####################################################################
@@ -79,6 +79,10 @@ rootdir = f"./Source/Soft Robot/ns-{num_segments}_dof-3/training/cv/"
 rootdir_true = f"./Source/Soft Robot/ns-{num_segments}_dof-3/training/true/"
 rootdir_val = f"./Source/Soft Robot/ns-{num_segments}_dof-3/validation/sinusoidal_actuation/"
 
+# rootdir = "./Source/Soft Robot/ns-2_dof-3_high_stiffness/training/true/"
+# rootdir_true = "./Source/Soft Robot/ns-2_dof-3_high_stiffness/training/true/"
+# rootdir_val = "./Source/Soft Robot/ns-2_dof-3_high_stiffness/validation/sinusoidal_actuation/"
+
 X = np.vstack(np.load(rootdir + "X.npy"))
 Xdot = np.vstack(np.load(rootdir + "Xdot.npy"))
 Tau = np.vstack(np.load(rootdir + "Tau.npy"))
@@ -96,7 +100,7 @@ Tau_val_true = np.vstack(np.load(rootdir_val + "Tau_val.npy"))
 #     ax[2].plot(X_true[:,i], label='GT')
 #     # ax[2].plot(X_2[:,i], label='Estimate (large torques & D=5e0)')
 #     ax[2].set_ylabel('$q$')
-#     # ax[2].legend(loc="upper right")
+#     ax[2].legend(loc="upper right")
 #     ax[2].grid(True)
 #     ax[1].plot(Xdot[:,i], label='Estimate')
 #     ax[1].plot(X_true[:,n_dof+i], label='GT')
@@ -119,8 +123,8 @@ bending_indices = [i for i in range(len(bending_map)) if bending_map[i]==True]
 if bending_indices != []:
     mask = True
     for idx in bending_indices:
-        mask = mask & (np.abs(X[:,idx]) >= 3.0)
-        mask_true = mask & (np.abs(X_true[:,idx]) >= 3.0)
+        mask = mask & (np.abs(X[:,idx]) >= 1.0)
+        mask_true = mask & (np.abs(X_true[:,idx]) >= 1.0)
     X = X[mask]
     X_true = X_true[mask_true]
     Xdot = Xdot[mask]
@@ -327,7 +331,7 @@ while convergence == False:
         if string_strains[i] == 'Bending':
             max_stiffness[i] = (0.25*(np.pi*(params['r'][strain_segments[i]])**4)*E_max)
         elif string_strains[i] == 'Shear':
-            max_stiffness[i] = ((4/3)*np.pi*((params['r'][strain_segments[i]])**2)*G_max)
+            max_stiffness[i] = (np.pi*((params['r'][strain_segments[i]])**2)*G_max)
         else:
             max_stiffness[i] = (np.pi*((params['r'][strain_segments[i]])**2)*E_max)
 
@@ -417,30 +421,30 @@ while convergence == False:
         Lagr_expr = new_Lagr_expr
 
 
-        states_sym = [ele for idx, ele in enumerate(states_sym) if ((idx != neglect_strain_index[0]) and (idx != neglect_strain_index[0]+n_dof))]
-        states_dot_sym = [ele for idx, ele in enumerate(states_dot_sym) if ((idx != neglect_strain_index[0]) and (idx != neglect_strain_index[0]+n_dof))]
+        states_sym = [ele for idx, ele in enumerate(states_sym) if (np.all(idx != neglect_strain_index) and np.all(idx != neglect_strain_index+n_dof))]
+        states_dot_sym = [ele for idx, ele in enumerate(states_dot_sym) if (np.all(idx != neglect_strain_index) and np.all(idx != neglect_strain_index+n_dof))]
 
-        states = [ele for idx, ele in enumerate(states) if ((idx != neglect_strain_index[0]) and (idx != neglect_strain_index[0]+n_dof))]
-        states_dot = [ele for idx, ele in enumerate(states_dot) if ((idx != neglect_strain_index[0]) and (idx != neglect_strain_index[0]+n_dof))]
+        states = [ele for idx, ele in enumerate(states) if (np.all(idx != neglect_strain_index) and np.all(idx != neglect_strain_index+n_dof))]
+        states_dot = [ele for idx, ele in enumerate(states_dot) if (np.all(idx != neglect_strain_index) and np.all(idx != neglect_strain_index+n_dof))]
 
-        states_epsed = [ele for idx, ele in enumerate(states_epsed) if ((idx != neglect_strain_index[0]) and (idx != neglect_strain_index[0]+n_dof))]
-        states_epsed_sym = [ele for idx, ele in enumerate(states_epsed_sym) if ((idx != neglect_strain_index[0]) and (idx != neglect_strain_index[0]+n_dof))]
+        states_epsed = [ele for idx, ele in enumerate(states_epsed) if (np.all(idx != neglect_strain_index) and np.all(idx != neglect_strain_index+n_dof))]
+        states_epsed_sym = [ele for idx, ele in enumerate(states_epsed_sym) if (np.all(idx != neglect_strain_index) and np.all(idx != neglect_strain_index+n_dof))]
 
-        string_strains = [ele for idx, ele in enumerate(string_strains) if (idx != neglect_strain_index[0])]
-        bending_map = [ele for idx, ele in enumerate(bending_map) if (idx != neglect_strain_index[0])]
-        strain_segments = [ele for idx, ele in enumerate(strain_segments) if (idx != neglect_strain_index[0])]
+        string_strains = [ele for idx, ele in enumerate(string_strains) if np.all(idx != neglect_strain_index)]
+        bending_map = [ele for idx, ele in enumerate(bending_map) if np.all(idx != neglect_strain_index)]
+        strain_segments = [ele for idx, ele in enumerate(strain_segments) if np.all(idx != neglect_strain_index)]
 
         # Delete neglected strains
-        X = np.delete(X, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
-        Xdot = np.delete(Xdot, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
-        X_epsed = np.delete(X_epsed, neglect_strain_index[0], 1)
-        Tau = np.delete(Tau, neglect_strain_index[0], 1)
+        X = np.delete(X, [*neglect_strain_index, *neglect_strain_index+n_dof], 1)
+        Xdot = np.delete(Xdot, [*neglect_strain_index, *neglect_strain_index+n_dof], 1)
+        X_epsed = np.delete(X_epsed, [*neglect_strain_index], 1)
+        Tau = np.delete(Tau, [*neglect_strain_index], 1)
         # X_val = np.delete(X_val, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
         # Xdot_val = np.delete(Xdot_val, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
         # Tau_val = np.delete(Tau_val, neglect_strain_index[0], 1)
-        X_val_true = np.delete(X_val_true, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
-        Xdot_val_true = np.delete(Xdot_val_true, [neglect_strain_index[0], neglect_strain_index[0]+n_dof], 1)
-        Tau_val_true = np.delete(Tau_val_true, neglect_strain_index[0], 1)
+        X_val_true = np.delete(X_val_true, [*neglect_strain_index, *neglect_strain_index+n_dof], 1)
+        Xdot_val_true = np.delete(Xdot_val_true, [*neglect_strain_index, *neglect_strain_index+n_dof], 1)
+        Tau_val_true = np.delete(Tau_val_true, [*neglect_strain_index], 1)
 
 
 # ------------------- Validation ---------------------------
@@ -529,7 +533,7 @@ def softrobot(t,x,args):
     x_epsed_list = []
     for i in range(x.shape[0]//2):
         if bending_map[i] == True:
-            q_epsed = apply_eps_to_bend_strains_jnp(x_[i], 4e0)
+            q_epsed = apply_eps_to_bend_strains_jnp(x_[i], 2e0)
         else:
             q_epsed = x_[i]
         

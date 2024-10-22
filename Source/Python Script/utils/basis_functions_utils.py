@@ -63,12 +63,12 @@ def B_decomp(expr, xi_sym, params):
         coeffs = p.coeffs()
         monoms = [sympy.prod(x**k for x, k in zip(p.gens, mon)) for mon in p.monoms()]
 
-    # combined = defaultdict(lambda: 0)
-    # for coeff, basis in zip(coeffs, monoms):
-    #     combined[coeff] += basis
+    combined = defaultdict(lambda: 0)
+    for coeff, basis in zip(coeffs, monoms):
+        combined[coeff] += basis
     
-    # coeffs = list(combined.keys())
-    # monoms = list(combined.values())
+    coeffs = list(combined.keys())
+    monoms = list(combined.values())
     return coeffs, monoms
 
 def U_decomp(expr, xi_sym, params):
@@ -136,12 +136,12 @@ def U_decomp(expr, xi_sym, params):
     coeffs = p.coeffs()
     monoms = [sympy.prod(x**k for x, k in zip(p.gens, mon)) for mon in p.monoms()]
 
-    # combined = defaultdict(lambda: 0)
-    # for coeff, basis in zip(coeffs, monoms):
-    #     combined[coeff] += basis
+    combined = defaultdict(lambda: 0)
+    for coeff, basis in zip(coeffs, monoms):
+        combined[coeff] += basis
     
-    # coeffs = list(combined.keys())
-    # monoms = list(combined.values())
+    coeffs = list(combined.keys())
+    monoms = list(combined.values())
     return coeffs, monoms
 
 def constructLagrangianExpression(sym_exps, states_sym, states_epsed_sym, xi_eq, B_xi, strain_selector, params, epsilon_bend):
@@ -218,12 +218,12 @@ def constructLagrangianExpression(sym_exps, states_sym, states_epsed_sym, xi_eq,
     true_coeffs = list(chain.from_iterable(true_coeffs))
     expr = list(chain.from_iterable(expr))
 
-    # combined = defaultdict(lambda: 0)
-    # for coeff, basis in zip(true_coeffs, expr):
-    #     combined[coeff] += basis
+    combined = defaultdict(lambda: 0)
+    for coeff, basis in zip(true_coeffs, expr):
+        combined[coeff] += basis
     
-    # true_coeffs = list(combined.keys())
-    # expr = list(combined.values())
+    true_coeffs = list(combined.keys())
+    expr = list(combined.values())
 
     true_coeffs_list = [true_coeffs[i].evalf() for i in range(len(true_coeffs)-n_dof)]
     for i in range(n_dof):
