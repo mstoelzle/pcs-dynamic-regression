@@ -204,16 +204,20 @@ if __name__ == "__main__":
     input_normalization_layer = keras.layers.Normalization(axis=-1)
     input_normalization_layer.adapt(x)
 
+
     # normalize the output data
     chi_i_dd_norm_const = np.array([500, 500, 25000])
     chi_dd_norm_const = np.tile(chi_i_dd_norm_const, num_markers)
-    # print("Chi dd norm const:", chi_dd_norm_const)
-    # y_norm, y_norm_train, y_norm_val = y.copy(), y_train.copy(), y_val.copy()
-    # y_norm[:, ::3], y_norm_train[:, ::3], y_norm_val[:, ::3] = y_norm[:, ::3] / chi_i_dd_norm_const[0], y_norm_train[:, ::3] / chi_i_dd_norm_const[0], y_norm_val[:, ::3] / chi_i_dd_norm_const[0]
-    # y_norm[:, 1::3], y_norm_train[:, 1::3], y_norm_val[:, 1::3] = y_norm[:, 1::3] / chi_i_dd_norm_const[1], y_norm_train[:, 1::3] / chi_i_dd_norm_const[1], y_norm_val[:, 1::3] / chi_i_dd_norm_const[1]
-    # y_norm[:, 2::3], y_norm_train[:, 2::3], y_norm_val[:, 2::3] = y_norm[:, 2::3] / chi_i_dd_norm_const[2], y_norm_train[:, 2::3] / chi_i_dd_norm_const[2], y_norm_val[:, 2::3] / chi_i_dd_norm_const[2]
-    output_normalization_layer = keras.layers.Lambda(lambda x: x / chi_dd_norm_const)
-    output_denormalization_layer = keras.layers.Lambda(lambda x: x * chi_dd_norm_const)
+    normalization_kwargs = dict(
+        axis=-1,
+        mean=np.zeros(chi_dd_norm_const.shape[-1]),
+        variance=chi_dd_norm_const ** 2,
+    )
+    output_normalization_layer = keras.layers.Normalization(**normalization_kwargs)
+    output_denormalization_layer = keras.layers.Normalization(
+        **normalization_kwargs,
+        invert=True,
+    )
     y_norm = output_normalization_layer(y)
     y_norm_train = output_normalization_layer(y_train)
     y_norm_val = output_normalization_layer(y_val)
