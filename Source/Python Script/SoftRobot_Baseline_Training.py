@@ -204,11 +204,18 @@ if __name__ == "__main__":
 
     # normalize the output data
     chi_i_dd_norm_const = np.array([500, 500, 25000])
-    y_norm, y_norm_train, y_norm_val = y.copy(), y_train.copy(), y_val.copy()
-    y_norm[:, ::3], y_norm_train[:, ::3], y_norm_val[:, ::3] = y_norm[:, ::3] / chi_i_dd_norm_const[0], y_norm_train[:, ::3] / chi_i_dd_norm_const[0], y_norm_val[:, ::3] / chi_i_dd_norm_const[0]
-    y_norm[:, 1::3], y_norm_train[:, 1::3], y_norm_val[:, 1::3] = y_norm[:, 1::3] / chi_i_dd_norm_const[1], y_norm_train[:, 1::3] / chi_i_dd_norm_const[1], y_norm_val[:, 1::3] / chi_i_dd_norm_const[1]
-    y_norm[:, 2::3], y_norm_train[:, 2::3], y_norm_val[:, 2::3] = y_norm[:, 2::3] / chi_i_dd_norm_const[2], y_norm_train[:, 2::3] / chi_i_dd_norm_const[2], y_norm_val[:, 2::3] / chi_i_dd_norm_const[2]
-    print("After normalization: y_norm min:\n", y_norm.min(axis=0), "\ny_norm max:\n", y_norm.max(axis=0))
+    chi_dd_norm_const = np.tile(chi_i_dd_norm_const, num_markers)
+    # print("Chi dd norm const:", chi_dd_norm_const)
+    # y_norm, y_norm_train, y_norm_val = y.copy(), y_train.copy(), y_val.copy()
+    # y_norm[:, ::3], y_norm_train[:, ::3], y_norm_val[:, ::3] = y_norm[:, ::3] / chi_i_dd_norm_const[0], y_norm_train[:, ::3] / chi_i_dd_norm_const[0], y_norm_val[:, ::3] / chi_i_dd_norm_const[0]
+    # y_norm[:, 1::3], y_norm_train[:, 1::3], y_norm_val[:, 1::3] = y_norm[:, 1::3] / chi_i_dd_norm_const[1], y_norm_train[:, 1::3] / chi_i_dd_norm_const[1], y_norm_val[:, 1::3] / chi_i_dd_norm_const[1]
+    # y_norm[:, 2::3], y_norm_train[:, 2::3], y_norm_val[:, 2::3] = y_norm[:, 2::3] / chi_i_dd_norm_const[2], y_norm_train[:, 2::3] / chi_i_dd_norm_const[2], y_norm_val[:, 2::3] / chi_i_dd_norm_const[2]
+    output_normalization_layer = keras.layers.Lambda(lambda x: x / chi_dd_norm_const)
+    output_denormalization_layer = keras.layers.Lambda(lambda x: x * chi_dd_norm_const)
+    y_norm = output_normalization_layer(y)
+    y_norm_train = output_normalization_layer(y_train)
+    y_norm_val = output_normalization_layer(y_val)
+    # print("After normalization: y_norm min:\n", y_norm.min(axis=0), "\ny_norm max:\n", y_norm.max(axis=0))
 
     # plot the output data in three subplots
     y_norm_min, y_norm_max = y_norm.min(), y_norm.max()
@@ -275,3 +282,13 @@ if __name__ == "__main__":
     print("Validation loss:", score_val)
     score_tot = model.evaluate(x, y_norm, verbose=1)
     print("Score on the entire dataset:", score_tot)
+
+    # add denormalization layer to the model
+    model_with_denormalization = keras.Sequential(
+        [
+            model,
+            output_denormalization_layer,
+        ]
+    )
+    # print("sample output before denormalization:", model.predict(x[:1]))
+    # print("sample output after denormalization:", model_with_denormalization.predict(x[:1]))
