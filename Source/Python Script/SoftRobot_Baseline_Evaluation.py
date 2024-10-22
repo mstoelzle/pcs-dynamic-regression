@@ -31,13 +31,20 @@ print("Model dir", model_dir.resolve())
 
 # load the trained model
 learned_model = keras.models.load_model(str(model_dir / 'learned_node_model.keras'), safe_mode=False)
+trainable_variables = learned_model.trainable_variables
+non_trainable_variables = learned_model.non_trainable_variables
+model_forward_fn = lambda x: learned_model.stateless_call(trainable_variables, non_trainable_variables, x)[0]
 
 
+@jit
 def ode_fn(t: Array, y: Array, tau: Array) -> Array:
     chi, chi_d = jnp.split(y, 2)
-    model_input = jnp.concatenate([chi, chi_d, tau], axis=-1)[None, :]
 
-    chi_dd = learned_model.predict(model_input, batch_size=1).squeeze(axis=0)
+    # call the model
+    model_input = jnp.concatenate([chi, chi_d, tau], axis=-1)[None, :]
+    model_output = model_forward_fn(model_input)
+
+    chi_dd = model_output.squeeze(axis=0)
 
     y_d = jnp.concatenate([chi_d, chi_dd], axis=-1)
     return y_d
