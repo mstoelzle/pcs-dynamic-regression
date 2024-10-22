@@ -85,21 +85,18 @@ if __name__ == "__main__":
     # num_markers = marker_indices.shape[0]
     # n_chi = Chi.shape[-1]
 
-    # smooth the data
-    Chi, Chi_d, Chi_dd = [], [], []
-    for i in range(num_videos):
-        savgol_window_length = 51
-        Chi_i_raw = Chi_raw[i * num_samples_per_video:(i + 1) * num_samples_per_video]
-        Chi_i = savgol_filter(Chi_i_raw, window_length=savgol_window_length, polyorder=3, deriv=0, delta=dt, axis=0)
-        Chi_d_i = savgol_filter(Chi_i_raw, window_length=savgol_window_length, polyorder=3, deriv=1, delta=dt, axis=0)
-        Chi_dd_i = savgol_filter(Chi_i_raw, window_length=savgol_window_length, polyorder=3, deriv=2, delta=dt, axis=0)
-        Chi.append(Chi_i)
-        Chi_d.append(Chi_d_i)
-        Chi_dd.append(Chi_dd_i)
-    Chi, Chi_d, Chi_dd = np.concatenate(Chi, axis=0), np.concatenate(Chi_d, axis=0), np.concatenate(Chi_dd, axis=0)
-    # Chi = Chi_raw
-    # Chi_d = np.gradient(Chi, dt, axis=0)
-    # Chi_dd = np.gradient(Chi_d, dt, axis=0)
+    # # smooth the data
+    # Chi, Chi_d, Chi_dd = [], [], []
+    # for i in range(num_videos):
+    #     savgol_window_length = 51
+    #     Chi_i_raw = Chi_raw[i * num_samples_per_video:(i + 1) * num_samples_per_video]
+    #     Chi_i = savgol_filter(Chi_i_raw, window_length=savgol_window_length, polyorder=3, deriv=0, delta=dt, axis=0)
+    #     Chi_d_i = savgol_filter(Chi_i_raw, window_length=savgol_window_length, polyorder=3, deriv=1, delta=dt, axis=0)
+    #     Chi_dd_i = savgol_filter(Chi_i_raw, window_length=savgol_window_length, polyorder=3, deriv=2, delta=dt, axis=0)
+    #     Chi.append(Chi_i)
+    #     Chi_d.append(Chi_d_i)
+    #     Chi_dd.append(Chi_dd_i)
+    # Chi, Chi_d, Chi_dd = np.concatenate(Chi, axis=0), np.concatenate(Chi_d, axis=0), np.concatenate(Chi_dd, axis=0)
       
     # plot the end effector data
     plt.figure(num="End effector pose")
