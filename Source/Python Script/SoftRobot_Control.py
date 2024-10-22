@@ -53,14 +53,14 @@ sim_duration_per_setpoint = 5.0  # s
 
 # define the time step
 dt = 1e-2
-sim_dt = 1e-4
+sim_dt = 5e-5
 t0 = 0.0
 t1 = num_setpoints * sim_duration_per_setpoint
 
 # define the control gains
-K_diag = jnp.diag(jnp.array([1e-1, 5e-1, 1e1, 1e-1, 5e-1, 1e1]))
+K_diag = jnp.diag(jnp.array([1e-1, 1e0, 4e1, 1e-1, 1e0, 4e1]))
 Kp = 1e-1 * K_diag
-Ki = 2e0 * K_diag
+Ki = 5e-1 * K_diag
 Kd = 1e-2 * K_diag
 gamma = 1e0 * jnp.diag(jnp.array([40.0, 0.1, 0.2, 40.0, 0.1, 0.2]))
 
@@ -189,7 +189,7 @@ if __name__ == '__main__':
     )
     # rescale the setpoints
     q_des_ps = q_des_ps * jnp.array([
-        40.0, 0.1, 0.2, 10.0, 0.1, 0.2
+        40.0, 0.05, 0.1, 10.0, 0.05, 0.1
     ])
     q_d_des_ps = jnp.zeros_like(q_des_ps)
 
