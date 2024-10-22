@@ -24,6 +24,8 @@ dataset_dir = Path("Source") / "Soft Robot" / "ns-2_dof-3" / "training" / "cv"
 val_ratio = 0.2
 # model parameters
 model_type = "node"
+mlp_num_layers = 5
+mlp_hidden_dim = 128
 # training parameters
 lr = 1e-3
 batch_size = 256
@@ -239,16 +241,15 @@ if __name__ == "__main__":
             input_dim = x.shape[-1]
             output_dim = y.shape[-1]
 
-            model = keras.Sequential(
-                [
-                    keras.layers.Input(shape=(input_dim, )),
-                    input_normalization_layer,
-                    keras.layers.Dense(64, activation="tanh"),
-                    keras.layers.Dense(64, activation="tanh"),
-                    keras.layers.Dense(64, activation="tanh"),
-                    keras.layers.Dense(output_dim),
-                ]
-            )
+            layers = [
+                keras.layers.Input(shape=(input_dim, )),
+                input_normalization_layer,
+            ]
+            for _ in range(mlp_num_layers - 1):
+                layers.append(keras.layers.Dense(mlp_hidden_dim, activation="tanh"))
+            layers.append(keras.layers.Dense(output_dim))
+
+            model = keras.Sequential(layers)
         case _:
             raise ValueError("Invalid model type")
     model.summary()
@@ -280,8 +281,8 @@ if __name__ == "__main__":
     print("Training loss:", score_train)
     score_val = model.evaluate(x_val, y_norm_val, verbose=1)
     print("Validation loss:", score_val)
-    score_tot = model.evaluate(x, y_norm, verbose=1)
-    print("Score on the entire dataset:", score_tot)
+    # score_tot = model.evaluate(x, y_norm, verbose=1)
+    # print("Score on the entire dataset:", score_tot)
 
     # add denormalization layer to the model
     model_with_denormalization = keras.Sequential(
@@ -292,3 +293,12 @@ if __name__ == "__main__":
     )
     # print("sample output before denormalization:", model.predict(x[:1]))
     # print("sample output after denormalization:", model_with_denormalization.predict(x[:1]))
+
+    # directory to save the model
+    model_dir = dataset_dir.parent.parent / "model"
+    model_dir.mkdir(parents=True, exist_ok=True)
+    model_path = model_dir / f"learned_{model_type}_model.keras"
+
+    # save the keras model
+    print(f"Saving the model to {model_path.resolve()}")
+    model_with_denormalization.save(model_path)
