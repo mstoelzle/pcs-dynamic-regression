@@ -58,10 +58,10 @@ t0 = 0.0
 t1 = num_setpoints * sim_duration_per_setpoint
 
 # define the control gains
-K_diag = jnp.diag(jnp.array([1e-1, 1e0, 4e1, 1e-1, 1e0, 4e1]))
+K_diag = jnp.diag(jnp.array([1e-1, 5e0, 6e1, 1e-1, 5e0, 6e1]))
 Kp = 1e-1 * K_diag
-Ki = 5e-1 * K_diag
-Kd = 1e-2 * K_diag
+Ki = 6e-1 * K_diag
+Kd = 2e-2 * jnp.diag(jnp.array([1e-1, 5e0, 4e1, 1e-1, 5e0, 4e1]))
 gamma = 1e0 * jnp.diag(jnp.array([40.0, 0.1, 0.2, 40.0, 0.1, 0.2]))
 
 
