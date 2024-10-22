@@ -36,6 +36,7 @@ params = {
     "th0": jnp.array(0.0),  # initial orientation angle [rad]
     "l": 1e-1 * jnp.ones((num_segments,)),
     "l": jnp.array([7e-2, 1e-1]),
+    "l": jnp.array([0.068, 0.102]),
     "r": 2e-2 * jnp.ones((num_segments,)),
     "rho": 1070 * jnp.ones((num_segments,)),
     "rho": jnp.array([1070, 1049]),
