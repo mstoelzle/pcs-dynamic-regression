@@ -1,4 +1,4 @@
-import numpy as np
+import numpy as onp
 import os
 
 os.environ["KERAS_BACKEND"] = "jax"
@@ -31,9 +31,9 @@ model_type = "node"
 mlp_num_layers = 5
 mlp_hidden_dim = 256
 # training parameters
-lr = 1e-2
-batch_size = 32
-num_epochs = 1000
+lr = 5e-3
+batch_size = 64
+num_epochs = 3000
 
 # random seed
 rng = random.PRNGKey(0)
@@ -86,10 +86,10 @@ class OdeRollout(keras.Model):
 
 if __name__ == "__main__":
     # Load the data
-    X = np.load(dataset_dir / "X.npy")  # configuration-space data
-    Chi_raw = np.load(dataset_dir / "Chi_raw.npy")  # the raw poses in Cartesian space
-    Y, Y_d = np.load(dataset_dir / "Y.npy"), np.load(dataset_dir / "Ydot.npy")
-    Tau = np.load(dataset_dir / "Tau.npy")
+    X = jnp.load(dataset_dir / "X.npy")  # configuration-space data
+    Chi_raw = jnp.load(dataset_dir / "Chi_raw.npy")  # the raw poses in Cartesian space
+    Y, Y_d = jnp.load(dataset_dir / "Y.npy"), jnp.load(dataset_dir / "Ydot.npy")
+    Tau = jnp.load(dataset_dir / "Tau.npy")
     num_samples = Y.shape[0]
     num_videos = X.shape[0]
     num_samples_per_video = num_samples // num_videos
@@ -141,7 +141,7 @@ if __name__ == "__main__":
         seq_start = video_idx * num_samples_per_video + video_start_frame
         seq_end = seq_start + seq_len
 
-        print("Sequence:", seq_idx, "Video:", video_idx, "Start frame:", video_start_frame, "Start:", seq_start, "End:", seq_end)
+        # print("Sequence:", seq_idx, "Video:", video_idx, "Start frame:", video_start_frame, "Start:", seq_start, "End:", seq_end)
 
         seq_ts = ts[seq_start:seq_end]
         seq_chi_ts = Chi[seq_start:seq_end]
@@ -155,11 +155,11 @@ if __name__ == "__main__":
         tau_seqs.append(seq_tau_ts)
 
     # stack the sequences
-    ts_seqs = np.stack(ts_seqs, axis=0)
-    chi_seqs = np.stack(chi_seqs, axis=0)
-    chi_d_seqs = np.stack(chi_d_seqs, axis=0)
-    chi_dd_seqs = np.stack(chi_dd_seqs, axis=0)
-    tau_seqs = np.stack(tau_seqs, axis=0)
+    ts_seqs = jnp.stack(ts_seqs, axis=0)
+    chi_seqs = jnp.stack(chi_seqs, axis=0)
+    chi_d_seqs = jnp.stack(chi_d_seqs, axis=0)
+    chi_dd_seqs = jnp.stack(chi_dd_seqs, axis=0)
+    tau_seqs = jnp.stack(tau_seqs, axis=0)
 
     # Split the data into training and validation sets
     num_val_samples = int(num_sequences * val_ratio)
@@ -171,25 +171,24 @@ if __name__ == "__main__":
     tau_seqs_train, tau_seqs_val = tau_seqs[:num_train_samples], tau_seqs[num_train_samples:]
 
     # construct the input and output data
-    x = np.concat((chi_seqs, chi_d_seqs, tau_seqs), axis=-1)
-    y = np.concat((chi_seqs, chi_d_seqs), axis=-1)
-    # x_train = np.concat((chi_seqs_train, chi_d_seqs_train, tau_seqs_train), axis=-1)
-    # y_train = chi_dd_seqs_train
-    # x_val = np.concat((chi_seqs_val, chi_d_seqs_val, tau_seqs_val), axis=-1)
-    # y_val = chi_dd_seqs_val
+    x = jnp.concat((chi_seqs, chi_d_seqs, tau_seqs), axis=-1)
+    y = jnp.concat((chi_seqs, chi_d_seqs, chi_dd_seqs), axis=-1)
+    x_train = jnp.concat((chi_seqs_train, chi_d_seqs_train, tau_seqs_train), axis=-1)
+    y_train = jnp.concat((chi_seqs_train, chi_d_seqs_train, chi_dd_seqs_train), axis=-1)
+    x_val = jnp.concat((chi_seqs_val, chi_d_seqs_val, tau_seqs_val), axis=-1)
+    y_val = jnp.concat((chi_seqs_val, chi_d_seqs_val, chi_dd_seqs_val), axis=-1)
 
     # normalize the input data
     input_normalization_layer = keras.layers.Normalization(axis=-1)
-    dynamics_model_input_for_normalization = np.concatenate([Chi, Chi_d, Tau], axis=-1)
-    print("input normalization input", dynamics_model_input_for_normalization.shape)
+    dynamics_model_input_for_normalization = jnp.concatenate([Chi, Chi_d, Tau], axis=-1)
     input_normalization_layer.adapt(dynamics_model_input_for_normalization)
 
     # # normalize the output data
-    # chi_i_dd_norm_const = np.array([500, 500, 25000])
-    # chi_dd_norm_const = np.tile(chi_i_dd_norm_const, num_markers)
+    # chi_i_dd_norm_const = jnp.array([500, 500, 25000])
+    # chi_dd_norm_const = jnp.tile(chi_i_dd_norm_const, num_markers)
     # normalization_kwargs = dict(
     #     axis=-1,
-    #     mean=np.zeros(chi_dd_norm_const.shape[-1]),
+    #     mean=jnp.zeros(chi_dd_norm_const.shape[-1]),
     #     variance=chi_dd_norm_const ** 2,
     # )
     # output_normalization_layer = keras.layers.Normalization(**normalization_kwargs)
@@ -224,25 +223,48 @@ if __name__ == "__main__":
     model = OdeRollout(dynamics_model, state_dim=2*n_chi, actuation_dim=n_tau, dt=dt)
     model.summary()
 
-    # # try processing a single sequence
-    # sample_input = x[0:2]
-    # sample_target = y[0:2]
-    # sample_output = model(sample_input)
-    # print("Sample output shape:", sample_output.shape, "Sample target shape:", sample_target.shape)
+    # try processing a single sequence
+    sample_input = x[0:2]
+    sample_target = y[0:2]
+    sample_output = model(sample_input)
+    print("Sample output shape:", sample_output.shape, "Sample target shape:", sample_target.shape)
     # print("sample output:\n", sample_output[0])
     # print("sample target:\n", sample_target[0])
 
+    # loss normalization
+    chi_i_norm_const = jnp.array([0.15, 0.15, 5])
+    chi_norm_const = jnp.tile(chi_i_norm_const, num_markers)
+
+    class NormalizedMeanSquaredError(keras.losses.Loss):
+        def call(self, y_true, y_pred):
+            error = y_true - y_pred
+            error_x = error[..., :n_chi]
+            error_x_d = error[..., n_chi:2*n_chi]
+            error_x_dd = error[..., 2*n_chi:]
+
+            # normalize the error
+            norm_error_x = error_x / chi_norm_const
+            norm_error_x_d = error_x_d / chi_norm_const * (2 * dt)
+            norm_error_x_dd = error_x_dd / chi_norm_const * (2 * dt)**2
+            
+            norm_error = jnp.concatenate([norm_error_x, norm_error_x_d, norm_error_x_dd], axis=-1)
+            loss = jnp.mean(jnp.square(norm_error), axis=-1)
+            return loss
+        
+
+    class NormalizedRootMeanSquaredError(NormalizedMeanSquaredError):
+        def call(self, y_true, y_pred):
+            return jnp.sqrt(super().call(y_true, y_pred))
+
+
+    lr_schedule = keras.optimizers.schedules.CosineDecay(lr, num_epochs)
     model.compile(
-        loss=[keras.metrics.MeanSquaredError()],
-        optimizer=keras.optimizers.AdamW(learning_rate=lr),
+        loss=[NormalizedMeanSquaredError()],
         metrics=[keras.metrics.RootMeanSquaredError()],
+        optimizer=keras.optimizers.AdamW(learning_rate=lr_schedule),
     )
 
-    # scheduler = keras.optimizers.schedules.CosineDecay(
-    #     lr, num_epochs
-    # )
     callbacks = [
-        # keras.callbacks.LearningRateScheduler(scheduler),
         # keras.callbacks.ModelCheckpoint(filepath="model_at_epoch_{epoch}.keras"),
         # keras.callbacks.EarlyStopping(monitor="val_loss", patience=10),
     ]
@@ -253,26 +275,16 @@ if __name__ == "__main__":
         batch_size=batch_size,
         epochs=num_epochs,
         validation_split=val_ratio,
-        # validation_data=(x_val, y_norm_val),
+        # validation_data=(x_val, y_val),
         callbacks=callbacks,
     )
 
-    # score_train = model.evaluate(x_train, y_norm_train, verbose=1)
-    # print("Training loss:", score_train)
-    # score_val = model.evaluate(x_val, y_norm_val, verbose=1)
-    # print("Validation loss:", score_val)
-    # score_tot = model.evaluate(x, y_norm, verbose=1)
-    # print("Score on the entire dataset:", score_tot)
-
-    # add denormalization layer to the model
-    # model_with_denormalization = keras.Sequential(
-    #     [
-    #         model,
-    #         output_denormalization_layer,
-    #     ]
-    # )
-    # print("sample output before denormalization:", model.predict(x[:1]))
-    # print("sample output after denormalization:", model_with_denormalization.predict(x[:1]))
+    score_train = model.evaluate(x_train, y_train, verbose=1)
+    print("Training loss:", score_train)
+    score_val = model.evaluate(x_val, y_val, verbose=1)
+    print("Validation loss:", score_val)
+    score_tot = model.evaluate(x, y, verbose=1)
+    print("Score on the entire dataset:", score_tot)
 
     # directory to save the model
     model_dir = dataset_dir.parent.parent / "model"
