@@ -1,5 +1,5 @@
 import jax
-import numpy as np
+import numpy as onp
 import os
 
 jax.config.update("jax_enable_x64", True)
@@ -33,6 +33,9 @@ print("Model dir", model_dir.resolve())
 
 # define the simulation parameters
 sim_dt = 1e-5
+
+# the plotting settings
+marker_skip = 3
 
 # load the trained model
 learned_model = keras.models.load_model(str(model_dir / 'learned_node_model.keras'), safe_mode=False)
@@ -115,8 +118,9 @@ if __name__ == "__main__":
     # load the dataset
     Y = jnp.load(dataset_dir / 'Y.npy')
     Y_d = jnp.load(dataset_dir / 'Ydot.npy')
-    Tau = np.load(dataset_dir / "Tau.npy")
+    Tau = jnp.load(dataset_dir / "Tau.npy")
     tau_ts = Tau.reshape(Y.shape[0], Tau.shape[-1])
+    # tau_ts = jnp.zeros_like(tau_ts)
 
     # set the time steps
     dt = 1e-3
@@ -126,6 +130,23 @@ if __name__ == "__main__":
     n_chi = Y.shape[-1] // 2
     Chi, Chi_d = Y[:, :n_chi], Y[:, n_chi:]
     Chi_dd = Y_d[:, n_chi:]
+
+    # evaluate accelerations on the training data
+    model_input = jnp.concatenate([Chi, Chi_d, tau_ts], axis=-1)
+    Chi_dd_hat = model_forward_fn(model_input)
+    # plot the ground-truth and predicted accelerations
+    fig, ax = plt.subplots(1, 1, dpi=200, num="acceleration")
+    for i in range(0, Chi_dd.shape[-1], marker_skip):
+        ax.plot(ts, Chi_dd[:, i], linestyle=":", linewidth=2.5, label=r"$\ddot{\chi}_{" + str(i + 1) + "}$")
+    ax.set_prop_cycle(None)
+    for i in range(0, Chi_dd_hat.shape[-1], marker_skip):
+        ax.plot(ts, Chi_dd_hat[:, i], linewidth=2.0, label=r"$\hat{\ddot{\chi}}_{" + str(i + 1) + "}$")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel(r"Acceleration [m/s$^2$]")
+    ax.grid(True)
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
 
     # define the initial condition
     y0 = jnp.array(Y[0])
@@ -152,7 +173,6 @@ if __name__ == "__main__":
     px_hat_ts = sim_ts["x_ts"][:, 0::3]
     py_hat_ts = sim_ts["x_ts"][:, 1::3]
     theta_hat_ts = sim_ts["x_ts"][:, 2::3]
-    marker_skip = 3
 
     # plot the x position
     fig, ax = plt.subplots(1, 1, dpi=200, num="x-position")
