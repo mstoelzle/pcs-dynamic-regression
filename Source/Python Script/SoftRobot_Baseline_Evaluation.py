@@ -32,7 +32,7 @@ model_dir = case_dir / "model"
 print("Model dir", model_dir.resolve())
 
 # define the simulation parameters
-sim_dt = 1e-3
+sim_dt = 1e-5
 
 # load the trained model
 learned_model = keras.models.load_model(str(model_dir / 'learned_node_model.keras'), safe_mode=False)
@@ -152,17 +152,18 @@ if __name__ == "__main__":
     px_hat_ts = sim_ts["x_ts"][:, 0::3]
     py_hat_ts = sim_ts["x_ts"][:, 1::3]
     theta_hat_ts = sim_ts["x_ts"][:, 2::3]
+    marker_skip = 3
 
     # plot the x position
     fig, ax = plt.subplots(1, 1, dpi=200, num="x-position")
     # plot the reference trajectory
-    for i in range(0, px_gt_ts.shape[-1], 3):
-        ax.plot(ts, px_gt_ts, linestyle=":", linewidth=2.5, label=r"$p_{\mathrm{x}" + str(i + 1) + "}$")
+    for i in range(0, px_gt_ts.shape[-1], marker_skip):
+        ax.plot(ts, px_gt_ts[:, i], linestyle=":", linewidth=2.5, label=r"$p_{\mathrm{x}," + str(i + 1) + "}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the predicted trajectory
-    for i in range(0, px_hat_ts.shape[-1], 3):
-        ax.plot(ts, px_hat_ts, linewidth=2.0, label=r"$\hat{p}_{\mathrm{x}" + str(i + 1) + "}$")
+    for i in range(0, px_hat_ts.shape[-1], marker_skip):
+        ax.plot(ts, px_hat_ts, linewidth=2.0, label=r"$\hat{p}_{\mathrm{x}," + str(i + 1) + "}$")
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("Position [m]")
     ax.grid(True)
@@ -173,13 +174,13 @@ if __name__ == "__main__":
     # plot the y position
     fig, ax = plt.subplots(1, 1, dpi=200, num="y-position")
     # plot the reference trajectory
-    for i in range(0, py_gt_ts.shape[-1], 3):
-        ax.plot(ts, py_gt_ts, linestyle=":", linewidth=2.5, label=r"$p_{\mathrm{y}" + str(i + 1) + "}$")
+    for i in range(0, py_gt_ts.shape[-1], marker_skip):
+        ax.plot(ts, py_gt_ts[:, i], linestyle=":", linewidth=2.5, label=r"$p_{\mathrm{y}," + str(i + 1) + "}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the predicted trajectory
-    for i in range(0, py_hat_ts.shape[-1], 3):
-        ax.plot(ts, py_hat_ts, linewidth=2.0, label=r"$\hat{p}_{\mathrm{y}" + str(i + 1) + "}$")
+    for i in range(0, py_hat_ts.shape[-1], marker_skip):
+        ax.plot(ts, py_hat_ts[:, i], linewidth=2.0, label=r"$\hat{p}_{\mathrm{y}," + str(i + 1) + "}$")
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("Position [m]")
     ax.grid(True)
@@ -190,13 +191,13 @@ if __name__ == "__main__":
     # plot the orientation
     fig, ax = plt.subplots(1, 1, dpi=200, num="orientation")
     # plot the reference trajectory
-    for i in range(0, theta_gt_ts.shape[-1], 3):
-        ax.plot(ts, theta_gt_ts, linestyle=":", linewidth=2.5, label=r"$\theta_" + str(i + 1) + "$")
+    for i in range(0, theta_gt_ts.shape[-1], marker_skip):
+        ax.plot(ts, theta_gt_ts[:, i], linestyle=":", linewidth=2.5, label=r"$\theta_{" + str(i + 1) + "}$")
     # reset the color cycle
     ax.set_prop_cycle(None)
     # plot the predicted trajectory
-    for i in range(0, theta_hat_ts.shape[-1], 3):
-        ax.plot(ts, theta_hat_ts, linewidth=2.0, label=r"$\hat{\theta}_" + str(i + 1) + "$")
+    for i in range(0, theta_hat_ts.shape[-1], marker_skip):
+        ax.plot(ts, theta_hat_ts[:, i], linewidth=2.0, label=r"$\hat{\theta}_{" + str(i + 1) + "}$")
     ax.set_xlabel("Time [s]")
     ax.set_ylabel("Orientation [rad]")
     ax.grid(True)
