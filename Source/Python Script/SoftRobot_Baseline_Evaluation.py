@@ -176,12 +176,12 @@ if __name__ == "__main__":
     plt.show()
 
     # define the initial condition
-    y0 = jnp.array(Y[0])
+    y0 = jnp.concat([chi_ts[0], chi_d_ts[0]], axis=-1)
     tau0 = jnp.array(tau_ts[0])
 
     # test the ode function
     y_d0 = ode_fn(0.0, y0, tau0)
-    print(y_d0)
+    print("y_d0:\n", y_d0)
 
     # simulate the learned dynamics on the training data
     sim_ts = simulate_dynamics(
