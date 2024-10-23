@@ -31,7 +31,7 @@ model_type = "node"
 mlp_num_layers = 5
 mlp_hidden_dim = 256
 # training parameters
-lr = 2e-3
+lr = 1e-2
 batch_size = 32
 num_epochs = 1000
 
@@ -48,32 +48,39 @@ class OdeRollout(keras.Model):
         self.dt = dt
 
     def call(self, inputs):
-        y_gt_ts, tau_ts = inputs[..., :self.state_dim], inputs[..., self.state_dim:]
+        y_gt_seqs, tau_seqs = inputs[..., :self.state_dim], inputs[..., self.state_dim:]
 
-        y = y_gt_ts[..., 0, :]
-        y_ts = [y]
-        
-        for time_idx in range(1, y_gt_ts.shape[-2]):
-            x = y[..., :self.state_dim//2]
-            x_d = y[..., self.state_dim//2:self.state_dim]
-            tau = tau_ts[..., time_idx, :]
+        y_pred = y_gt_seqs[..., 0, :]
+        y_pred_seqs = [y_pred]
+        for time_idx in range(1, y_gt_seqs.shape[-2]):
+            x = y_pred[..., :self.state_dim//2]
+            x_d = y_pred[..., self.state_dim//2:self.state_dim]
+            tau = tau_seqs[..., time_idx, :]
 
-            dynamics_model_inputs = jnp.concatenate([y, tau], axis=-1)
-            x_dd = self.dynamics_model(dynamics_model_inputs)
+            dynamics_model_inputs = jnp.concatenate([y_pred, tau], axis=-1)
+            x_dd_pred = self.dynamics_model(dynamics_model_inputs)
 
             # state the ODE
-            y_d = jnp.concatenate([x_d, x_dd], axis=-1)
+            y_d_pred = jnp.concatenate([x_d, x_dd_pred], axis=-1)
 
             # integrate the ODE with Euler's method
-            y = y + self.dt * y_d
+            y_pred = y_pred + self.dt * y_d_pred
 
             # append the state to the list
-            y_ts.append(y)
+            y_pred_seqs.append(y_pred)
         
-        y_ts = jnp.stack(y_ts, axis=-2)
-        # x_ts = y_ts[..., :self.state_dim]
+        y_pred_seqs = jnp.stack(y_pred_seqs, axis=-2)
 
-        return y_ts
+        # compute the acceleration on all time steps
+        y_gt_ts = y_gt_seqs.reshape(-1, self.state_dim)
+        tau_ts = tau_seqs.reshape(-1, self.actuation_dim)
+        x_dd_pred_ts = self.dynamics_model(jnp.concat([y_gt_ts, tau_ts], axis=-1))
+        # reshape to batch_dim x seq_len x state_dim//2
+        x_dd_pred_seqs = x_dd_pred_ts.reshape(y_gt_seqs.shape[:-1] + (self.state_dim//2,))
+
+        output = jnp.concatenate([y_pred_seqs, x_dd_pred_seqs], axis=-1)
+
+        return output
 
 
 
@@ -217,20 +224,18 @@ if __name__ == "__main__":
     model = OdeRollout(dynamics_model, state_dim=2*n_chi, actuation_dim=n_tau, dt=dt)
     model.summary()
 
-    # try processing a single sequence
-    sample_input = x[0:2]
-    sample_target = y[0:2]
-    sample_output = model(sample_input)
-    print("Sample output shape:", sample_output.shape, "Sample target shape:", sample_target.shape)
-    print("sample output:\n", sample_output[0])
-    print("sample target:\n", sample_target[0])
+    # # try processing a single sequence
+    # sample_input = x[0:2]
+    # sample_target = y[0:2]
+    # sample_output = model(sample_input)
+    # print("Sample output shape:", sample_output.shape, "Sample target shape:", sample_target.shape)
+    # print("sample output:\n", sample_output[0])
+    # print("sample target:\n", sample_target[0])
 
     model.compile(
-        loss=keras.losses.MeanSquaredError(),
+        loss=[keras.metrics.MeanSquaredError()],
         optimizer=keras.optimizers.AdamW(learning_rate=lr),
-        metrics=[
-            keras.metrics.RootMeanSquaredError(),
-        ],
+        metrics=[keras.metrics.RootMeanSquaredError()],
     )
 
     # scheduler = keras.optimizers.schedules.CosineDecay(
