@@ -1,0 +1,279 @@
+import numpy as np
+import os
+
+os.environ["KERAS_BACKEND"] = "jax"
+
+# Note that Keras should only be imported after the backend
+# has been configured. The backend cannot be changed once the
+# package is imported.
+from jax import random
+import jax.numpy as jnp
+import keras
+import matplotlib.pyplot as plt
+from pathlib import Path
+from scipy.signal import savgol_filter
+
+
+# Set the seed using keras.utils.set_random_seed. This will set:
+# 1) `numpy` seed
+# 2) backend random seed
+# 3) `python` random seed
+keras.utils.set_random_seed(0)
+
+
+# dataset parameters
+dataset_dir = Path("Source") / "Soft Robot" / "ns-2_dof-3" / "training" / "cv"
+val_ratio = 0.2
+num_sequences = 400
+seq_dur = 0.1
+# model parameters
+model_type = "node"
+mlp_num_layers = 5
+mlp_hidden_dim = 256
+# training parameters
+lr = 2e-3
+batch_size = 32
+num_epochs = 1000
+
+# random seed
+rng = random.PRNGKey(0)
+
+
+class OdeRollout(keras.Model):
+    def __init__(self, dynamics_model, state_dim: int, actuation_dim: int, dt: float):
+        super().__init__()
+        self.state_dim = state_dim
+        self.actuation_dim = actuation_dim
+        self.dynamics_model = dynamics_model
+        self.dt = dt
+
+    def call(self, inputs):
+        y_gt_ts, tau_ts = inputs[..., :self.state_dim], inputs[..., self.state_dim:]
+
+        y = y_gt_ts[..., 0, :]
+        y_ts = [y]
+        
+        for time_idx in range(1, y_gt_ts.shape[-2]):
+            x = y[..., :self.state_dim//2]
+            x_d = y[..., self.state_dim//2:self.state_dim]
+            tau = tau_ts[..., time_idx, :]
+
+            dynamics_model_inputs = jnp.concatenate([y, tau], axis=-1)
+            x_dd = self.dynamics_model(dynamics_model_inputs)
+
+            # state the ODE
+            y_d = jnp.concatenate([x_d, x_dd], axis=-1)
+
+            # integrate the ODE with Euler's method
+            y = y + self.dt * y_d
+
+            # append the state to the list
+            y_ts.append(y)
+        
+        y_ts = jnp.stack(y_ts, axis=-2)
+        # x_ts = y_ts[..., :self.state_dim]
+
+        return y_ts
+
+
+
+if __name__ == "__main__":
+    # Load the data
+    X = np.load(dataset_dir / "X.npy")  # configuration-space data
+    Chi_raw = np.load(dataset_dir / "Chi_raw.npy")  # the raw poses in Cartesian space
+    Y, Y_d = np.load(dataset_dir / "Y.npy"), np.load(dataset_dir / "Ydot.npy")
+    Tau = np.load(dataset_dir / "Tau.npy")
+    num_samples = Y.shape[0]
+    num_videos = X.shape[0]
+    num_samples_per_video = num_samples // num_videos
+    num_markers = Chi_raw.shape[1] // 3
+    n_chi = Y.shape[-1] // 2
+    n_tau = Tau.shape[-1]
+    Chi, Chi_d = Y[:, :n_chi], Y[:, n_chi:]
+    Chi_dd = Y_d[:, n_chi:]
+    # reshape Tau to match the input shape
+    Tau = Tau.reshape(num_samples, n_tau)
+
+    dt = 1e-3
+    ts = dt * np.arange(num_samples)
+
+    # # marker sub-sampling
+    # print("Number of markers:", num_markers)
+    # marker_indices = np.array([num_markers // 2, num_markers - 1])
+    # # marker_indices = np.array([num_markers - 1])
+    # print("Marker indices:", marker_indices)
+    # # reshape tensors
+    # Chi = Chi.reshape(num_samples, num_markers, 3)
+    # Chi_raw = Chi_raw.reshape(num_samples, num_markers, 3)
+    # Chi_d = Chi_d.reshape(num_samples, num_markers, 3)
+    # Chi_dd = Chi_dd.reshape(num_samples, num_markers, 3)
+    # # sub-sample the data
+    # Chi_raw = Chi_raw[:, marker_indices, :].reshape(num_samples, -1)
+    # Chi = Chi[:, marker_indices, :].reshape(num_samples, -1)
+    # Chi_d = Chi_d[:, marker_indices, :].reshape(num_samples, -1)
+    # Chi_dd = Chi_dd[:, marker_indices, :].reshape(num_samples, -1)
+    # # update the number of markers
+    # num_markers = marker_indices.shape[0]
+    # n_chi = Chi.shape[-1]
+
+
+    # create sequences of 0.1s duration
+    seq_len = int(seq_dur / dt)
+    print("Number of sequences:", num_sequences)
+    ts_seqs, chi_seqs, chi_d_seqs, chi_dd_seqs, tau_seqs = [], [], [], [], []
+    for seq_idx in range(num_sequences):
+        # split random key
+        rng, subkey1, subkey2 = random.split(rng, 3)
+
+        # randomly select a video
+        video_idx = random.randint(subkey1, (1,), 0, num_videos).item()
+        # randomly select a starting frame
+        video_start_frame = random.randint(subkey2, (1,), 0, num_samples_per_video - seq_len).item()
+
+        # extract the sequence
+        seq_start = video_idx * num_samples_per_video + video_start_frame
+        seq_end = seq_start + seq_len
+
+        print("Sequence:", seq_idx, "Video:", video_idx, "Start frame:", video_start_frame, "Start:", seq_start, "End:", seq_end)
+
+        seq_ts = ts[seq_start:seq_end]
+        seq_chi_ts = Chi[seq_start:seq_end]
+        seq_chi_d_ts = Chi_d[seq_start:seq_end]
+        seq_chi_dd_ts = Chi_dd[seq_start:seq_end]
+        seq_tau_ts = Tau[seq_start:seq_end]
+        ts_seqs.append(seq_ts)
+        chi_seqs.append(seq_chi_ts)
+        chi_d_seqs.append(seq_chi_d_ts)
+        chi_dd_seqs.append(seq_chi_dd_ts)
+        tau_seqs.append(seq_tau_ts)
+
+    # stack the sequences
+    ts_seqs = np.stack(ts_seqs, axis=0)
+    chi_seqs = np.stack(chi_seqs, axis=0)
+    chi_d_seqs = np.stack(chi_d_seqs, axis=0)
+    chi_dd_seqs = np.stack(chi_dd_seqs, axis=0)
+    tau_seqs = np.stack(tau_seqs, axis=0)
+
+    # Split the data into training and validation sets
+    num_val_samples = int(num_sequences * val_ratio)
+    num_train_samples = num_sequences - num_val_samples
+    print("Number of training samples:", num_train_samples, "Number of validation samples:", num_val_samples)
+    chi_seqs_train, chi_seqs_val = chi_seqs[:num_train_samples], chi_seqs[num_train_samples:]
+    chi_d_seqs_train, chi_d_seqs_val = chi_d_seqs[:num_train_samples], chi_d_seqs[num_train_samples:]
+    chi_dd_seqs_train, chi_dd_seqs_val = chi_dd_seqs[:num_train_samples], chi_dd_seqs[num_train_samples:]
+    tau_seqs_train, tau_seqs_val = tau_seqs[:num_train_samples], tau_seqs[num_train_samples:]
+
+    # construct the input and output data
+    x = np.concat((chi_seqs, chi_d_seqs, tau_seqs), axis=-1)
+    y = np.concat((chi_seqs, chi_d_seqs), axis=-1)
+    # x_train = np.concat((chi_seqs_train, chi_d_seqs_train, tau_seqs_train), axis=-1)
+    # y_train = chi_dd_seqs_train
+    # x_val = np.concat((chi_seqs_val, chi_d_seqs_val, tau_seqs_val), axis=-1)
+    # y_val = chi_dd_seqs_val
+
+    # normalize the input data
+    input_normalization_layer = keras.layers.Normalization(axis=-1)
+    dynamics_model_input_for_normalization = np.concatenate([Chi, Chi_d, Tau], axis=-1)
+    print("input normalization input", dynamics_model_input_for_normalization.shape)
+    input_normalization_layer.adapt(dynamics_model_input_for_normalization)
+
+    # # normalize the output data
+    # chi_i_dd_norm_const = np.array([500, 500, 25000])
+    # chi_dd_norm_const = np.tile(chi_i_dd_norm_const, num_markers)
+    # normalization_kwargs = dict(
+    #     axis=-1,
+    #     mean=np.zeros(chi_dd_norm_const.shape[-1]),
+    #     variance=chi_dd_norm_const ** 2,
+    # )
+    # output_normalization_layer = keras.layers.Normalization(**normalization_kwargs)
+    # output_denormalization_layer = keras.layers.Normalization(
+    #     **normalization_kwargs,
+    #     invert=True,
+    # )
+    # y_norm = output_normalization_layer(y)
+    # y_norm_train = output_normalization_layer(y_train)
+    # y_norm_val = output_normalization_layer(y_val)
+    # print("After normalization: y_norm min:\n", y_norm.min(axis=0), "\ny_norm max:\n", y_norm.max(axis=0))
+
+
+    match model_type:
+        case "node":
+            input_dim = 2*n_chi + n_tau
+            output_dim = n_chi
+
+            layers = [
+                keras.layers.Input(shape=(input_dim, )),
+                input_normalization_layer,
+            ]
+            for _ in range(mlp_num_layers - 1):
+                layers.append(keras.layers.Dense(mlp_hidden_dim, activation="tanh"))
+            layers.append(keras.layers.Dense(output_dim))
+
+            dynamics_model = keras.Sequential(layers)
+        case _:
+            raise ValueError("Invalid model type")
+    dynamics_model.summary()
+
+    model = OdeRollout(dynamics_model, state_dim=2*n_chi, actuation_dim=n_tau, dt=dt)
+    model.summary()
+
+    # try processing a single sequence
+    sample_input = x[0:2]
+    sample_target = y[0:2]
+    sample_output = model(sample_input)
+    print("Sample output shape:", sample_output.shape, "Sample target shape:", sample_target.shape)
+    print("sample output:\n", sample_output[0])
+    print("sample target:\n", sample_target[0])
+
+    model.compile(
+        loss=keras.losses.MeanSquaredError(),
+        optimizer=keras.optimizers.AdamW(learning_rate=lr),
+        metrics=[
+            keras.metrics.RootMeanSquaredError(),
+        ],
+    )
+
+    # scheduler = keras.optimizers.schedules.CosineDecay(
+    #     lr, num_epochs
+    # )
+    callbacks = [
+        # keras.callbacks.LearningRateScheduler(scheduler),
+        # keras.callbacks.ModelCheckpoint(filepath="model_at_epoch_{epoch}.keras"),
+        # keras.callbacks.EarlyStopping(monitor="val_loss", patience=10),
+    ]
+
+    model.fit(
+        x,
+        y,
+        batch_size=batch_size,
+        epochs=num_epochs,
+        validation_split=val_ratio,
+        # validation_data=(x_val, y_norm_val),
+        callbacks=callbacks,
+    )
+
+    # score_train = model.evaluate(x_train, y_norm_train, verbose=1)
+    # print("Training loss:", score_train)
+    # score_val = model.evaluate(x_val, y_norm_val, verbose=1)
+    # print("Validation loss:", score_val)
+    # score_tot = model.evaluate(x, y_norm, verbose=1)
+    # print("Score on the entire dataset:", score_tot)
+
+    # add denormalization layer to the model
+    # model_with_denormalization = keras.Sequential(
+    #     [
+    #         model,
+    #         output_denormalization_layer,
+    #     ]
+    # )
+    # print("sample output before denormalization:", model.predict(x[:1]))
+    # print("sample output after denormalization:", model_with_denormalization.predict(x[:1]))
+
+    # directory to save the model
+    model_dir = dataset_dir.parent.parent / "model"
+    model_dir.mkdir(parents=True, exist_ok=True)
+    model_path = model_dir / f"learned_{model_type}_model_with_rollout.keras"
+
+    # save the keras model
+    print(f"Saving the model to {model_path.resolve()}")
+    dynamics_model.save(model_path)
