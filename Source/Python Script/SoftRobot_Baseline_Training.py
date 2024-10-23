@@ -25,11 +25,11 @@ val_ratio = 0.2
 # model parameters
 model_type = "node"
 mlp_num_layers = 5
-mlp_hidden_dim = 128
+mlp_hidden_dim = 256
 # training parameters
 lr = 1e-3
 batch_size = 256
-num_epochs = 100
+num_epochs = 1000
 
 
 if __name__ == "__main__":
@@ -80,9 +80,13 @@ if __name__ == "__main__":
     # # reshape tensors
     # Chi = Chi.reshape(num_samples, num_markers, 3)
     # Chi_raw = Chi_raw.reshape(num_samples, num_markers, 3)
+    # Chi_d = Chi_d.reshape(num_samples, num_markers, 3)
+    # Chi_dd = Chi_dd.reshape(num_samples, num_markers, 3)
     # # sub-sample the data
     # Chi_raw = Chi_raw[:, marker_indices, :].reshape(num_samples, -1)
     # Chi = Chi[:, marker_indices, :].reshape(num_samples, -1)
+    # Chi_d = Chi_d[:, marker_indices, :].reshape(num_samples, -1)
+    # Chi_dd = Chi_dd[:, marker_indices, :].reshape(num_samples, -1)
     # # update the number of markers
     # num_markers = marker_indices.shape[0]
     # n_chi = Chi.shape[-1]
@@ -268,7 +272,7 @@ if __name__ == "__main__":
 
     callbacks = [
         # keras.callbacks.ModelCheckpoint(filepath="model_at_epoch_{epoch}.keras"),
-        keras.callbacks.EarlyStopping(monitor="val_loss", patience=10),
+        # keras.callbacks.EarlyStopping(monitor="val_loss", patience=10),
     ]
 
     model.fit(
