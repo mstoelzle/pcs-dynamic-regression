@@ -27,9 +27,12 @@ keras.utils.set_random_seed(0)
 
 # define directories
 case_dir = Path(f"./Source/Soft Robot/ns-2_dof-3")
-dataset_dir = case_dir / "training" / "cv"
 model_dir = case_dir / "model"
 print("Model dir", model_dir.resolve())
+
+# dataset type
+dataset_type = "val"
+assert dataset_type in ["train", "val"], "Invalid dataset type."
 
 # define the simulation parameters
 sim_dt = 5e-6
@@ -117,27 +120,46 @@ def simulate_dynamics(
 
 
 if __name__ == "__main__":
-    # load the dataset
-    Y = jnp.load(dataset_dir / 'Y.npy')
-    Y_d = jnp.load(dataset_dir / 'Ydot.npy')
-    Tau = jnp.load(dataset_dir / "Tau.npy")
-    tau_ts = Tau.reshape(Y.shape[0], Tau.shape[-1])
-    # tau_ts = jnp.zeros_like(tau_ts)
+    match dataset_type:
+        case "train":
+            dataset_dir = case_dir / "training" / "cv"
 
-    # only simulate for the first video
-    dataset_selector = jnp.arange(Y.shape[0] // 8)
-    Y = Y[dataset_selector]
-    Y_d = Y_d[dataset_selector]
-    tau_ts = tau_ts[dataset_selector]
+            # load the dataset
+            Y = jnp.load(dataset_dir / 'Y.npy')
+            Y_d = jnp.load(dataset_dir / 'Ydot.npy')
+            Tau = jnp.load(dataset_dir / "Tau.npy")
+            tau_ts = Tau.reshape(Y.shape[0], Tau.shape[-1])
 
-    # set the time steps
-    dt = 1e-3
-    ts = dt * dataset_selector
+            # only simulate for the first video
+            dataset_selector = jnp.arange(Y.shape[0] // 8)
+            Y = Y[dataset_selector]
+            Y_d = Y_d[dataset_selector]
+            tau_ts = tau_ts[dataset_selector]
 
-    # split the dataset
-    n_chi = Y.shape[-1] // 2
-    chi_ts, chi_d_ts = Y[:, :n_chi], Y[:, n_chi:]
-    chi_dd_ts = Y_d[:, n_chi:]
+            # split the dataset
+            n_chi = Y.shape[-1] // 2
+            chi_ts, chi_d_ts = Y[:, :n_chi], Y[:, n_chi:]
+            chi_dd_ts = Y_d[:, n_chi:]
+
+            # set the time steps
+            dt = 1e-3
+            ts = dt * dataset_selector
+        case "val":
+            dataset_dir = case_dir / "validation" / "sinusoidal_actuation"
+
+            # load the dataset
+            chi_ts = jnp.load(dataset_dir / 'Chi_val_true.npy')
+            Tau = jnp.load(dataset_dir / "Tau_val.npy")
+            print("Chi shape:", chi_ts.shape)
+            print("Tau shape:", Tau.shape)
+            n_chi = chi_ts.shape[-1]
+            tau_ts = Tau.reshape(chi_ts.shape[0], Tau.shape[-1])
+
+            # set the time steps
+            dt = 1e-3
+            ts = dt * jnp.arange(chi_ts.shape[0])
+        case _:
+            raise ValueError("Invalid dataset type.")
 
     # # marker sub-sampling
     # num_samples = chi_ts.shape[0]
@@ -200,7 +222,6 @@ if __name__ == "__main__":
     px_hat_ts = sim_ts["x_ts"][:, 0::3]
     py_hat_ts = sim_ts["x_ts"][:, 1::3]
     theta_hat_ts = sim_ts["x_ts"][:, 2::3]
-    print("px_hat_ts\n", px_hat_ts)
 
     # plot the x position
     fig, ax = plt.subplots(1, 1, dpi=200, num="x-position")
