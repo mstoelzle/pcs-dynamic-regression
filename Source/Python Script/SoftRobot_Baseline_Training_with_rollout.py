@@ -102,12 +102,12 @@ if __name__ == "__main__":
     Tau = Tau.reshape(num_samples, n_tau)
 
     dt = 1e-3
-    ts = dt * np.arange(num_samples)
+    ts = dt * jnp.arange(num_samples)
 
     # # marker sub-sampling
     # print("Number of markers:", num_markers)
-    # marker_indices = np.array([num_markers // 2, num_markers - 1])
-    # # marker_indices = np.array([num_markers - 1])
+    # marker_indices = jnp.array([num_markers // 2, num_markers - 1])
+    # # marker_indices = jnp.array([num_markers - 1])
     # print("Marker indices:", marker_indices)
     # # reshape tensors
     # Chi = Chi.reshape(num_samples, num_markers, 3)
