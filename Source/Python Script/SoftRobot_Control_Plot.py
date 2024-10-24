@@ -21,7 +21,7 @@ plt.rcParams.update(
     }
 )
 
-figsize = (5.0, 3.5)
+figsize = (5.0, 3.0)
 dpi = 200
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     ax.plot(sim_ts['ts'], sim_ts['q_ts'][:, 2], linewidth=2.0, label=r"$\sigma_{\mathrm{ax},1}$")
     ax.plot(sim_ts['ts'], sim_ts['q_ts'][:, 5], linewidth=2.0, label=r"$\sigma_{\mathrm{ax},2}$")
     ax.set_xlabel(r"Time $t$ [s]")
-    ax.set_ylabel(r"Linear strains $\sigma$ [rad/m]")
+    ax.set_ylabel(r"Linear strains $\sigma$ [-]")
     ax.legend()
     ax.grid(True)
     plt.tight_layout()
