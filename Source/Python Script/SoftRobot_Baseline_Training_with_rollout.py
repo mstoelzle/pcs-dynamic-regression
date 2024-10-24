@@ -257,11 +257,14 @@ if __name__ == "__main__":
             return jnp.sqrt(super().call(y_true, y_pred))
 
 
-    lr_schedule = keras.optimizers.schedules.CosineDecay(lr, num_epochs)
+    # lr_schedule = keras.optimizers.schedules.CosineDecay(lr, num_epochs)
     model.compile(
         loss=[NormalizedMeanSquaredError()],
         metrics=[keras.metrics.RootMeanSquaredError()],
-        optimizer=keras.optimizers.AdamW(learning_rate=lr_schedule),
+        optimizer=keras.optimizers.AdamW(
+            # learning_rate=lr_schedule
+            learning_rate=lr
+        ),
     )
 
     callbacks = [
