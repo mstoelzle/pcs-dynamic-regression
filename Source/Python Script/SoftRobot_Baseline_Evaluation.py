@@ -35,7 +35,9 @@ dataset_type = "train"
 assert dataset_type in ["train", "val"], "Invalid dataset type."
 
 # define the simulation parameters
-sim_dt = 5e-6
+sim_dt = 1e-5
+dt = 1e-3  # sampling time step
+control_dt = 1e-2  # control time step
 
 # plotting settings
 plot_position_skip = 6
@@ -68,6 +70,7 @@ def simulate_dynamics(
     x_d0: Array,
     tau_ts: Array,
     sim_dt: float,
+    sample_dt: Array,
     control_dt: float,
     control_ts: Array,
     ode_solver_class=dfx.Tsit5,
@@ -76,14 +79,16 @@ def simulate_dynamics(
 
     ode_solver = ode_solver_class()
     
+    assert sample_dt <= control_dt, "The sample time must be less than or equal to the control time step."
     assert control_ts.shape[0] == tau_ts.shape[0], "The control time steps must match the control inputs."
+
+    sample_ts = jnp.arange(0.0, control_dt, sample_dt)
     y0 = jnp.concatenate((x0, x_d0), axis=-1)
 
     @jit
     def scan_fn(carry, input):
         t, tau = input["t"], input["tau"]
         y = carry["y_next"]
-        x, x_d = y[:n_x], y[n_x:]
 
         ode_term = dfx.ODETerm(ode_fn)
 
@@ -96,17 +101,24 @@ def simulate_dynamics(
             y0=y,
             args=tau,
             max_steps=None,
+            saveat=dfx.SaveAt(ts=t+sample_ts)
         )
+
+        t_sts = t+sample_ts
+        y_sts = sol.ys
+        x_sts, x_d_sts = jnp.split(y_sts, 2, axis=-1)
+        tau_sts = tau[None, :].repeat(y_sts.shape[0], axis=0)
 
         y_next = sol.ys[-1]
 
         carry["y_next"] = y_next
 
         output = {
-            "ts": t,
-            "x_ts": x,
-            "x_d_ts": x_d,
-            "y_ts": y,
+            "ts": t_sts,
+            "x_ts": x_sts,
+            "x_d_ts": x_d_sts,
+            "y_ts": y_sts,
+            "tau_ts": tau_sts
         }
 
         return carry, output
@@ -114,6 +126,10 @@ def simulate_dynamics(
     init_carry = dict(y_next=y0)
     input_ts = dict(t=control_ts, tau=tau_ts)
     last_carry, sim_ts = lax.scan(scan_fn, init_carry, input_ts)
+
+    # flatten to shape num_sampling_steps x value_dimensionality
+    for key, val in sim_ts.items():
+        sim_ts[key] = val.reshape((-1,) + val.shape[2:])
 
     return sim_ts
 
@@ -142,7 +158,6 @@ if __name__ == "__main__":
             chi_dd_ts = Y_d[:, n_chi:]
 
             # set the time steps
-            dt = 1e-3
             ts = dt * dataset_selector
         case "val":
             dataset_dir = case_dir / "validation" / "sinusoidal_actuation"
@@ -155,7 +170,6 @@ if __name__ == "__main__":
             tau_ts = Tau.reshape(-1, Tau.shape[-1])
 
             # set the time steps
-            dt = 1e-3
             ts = dt * jnp.arange(chi_ts.shape[0])
 
             # differentiate the target poses to obtain the velocities and accelerations for visualization
@@ -213,10 +227,11 @@ if __name__ == "__main__":
     sim_ts = simulate_dynamics(
         x0=chi_ts[0],
         x_d0=chi_d_ts[0],
-        tau_ts=tau_ts,
+        tau_ts=tau_ts[::int(control_dt/dt)],  # downsample the control inputs to 100 Hz
         sim_dt=sim_dt,
-        control_dt=dt,
-        control_ts=ts,
+        sample_dt=dt,
+        control_dt=control_dt,  
+        control_ts=ts[::int(control_dt/dt)],
     )
 
     # extract the data
