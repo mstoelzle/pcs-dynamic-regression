@@ -148,16 +148,20 @@ if __name__ == "__main__":
             dataset_dir = case_dir / "validation" / "sinusoidal_actuation"
 
             # load the dataset
-            chi_ts = jnp.load(dataset_dir / 'Chi_val_true.npy')
+            Chi = jnp.load(dataset_dir / 'Chi_val.npy')
+            chi_ts = Chi.reshape(Chi.shape[0], -1)
             Tau = jnp.load(dataset_dir / "Tau_val.npy")
-            print("Chi shape:", chi_ts.shape)
-            print("Tau shape:", Tau.shape)
             n_chi = chi_ts.shape[-1]
-            tau_ts = Tau.reshape(chi_ts.shape[0], Tau.shape[-1])
+            tau_ts = Tau.reshape(-1, Tau.shape[-1])
 
             # set the time steps
             dt = 1e-3
             ts = dt * jnp.arange(chi_ts.shape[0])
+
+            # differentiate the target poses to obtain the velocities and accelerations for visualization
+            savgol_window_length = 51
+            chi_d_ts = savgol_filter(chi_ts, window_length=savgol_window_length, polyorder=3, deriv=1, delta=dt, axis=0)
+            chi_dd_ts = savgol_filter(chi_ts, window_length=savgol_window_length, polyorder=3, deriv=2, delta=dt, axis=0)
         case _:
             raise ValueError("Invalid dataset type.")
 
