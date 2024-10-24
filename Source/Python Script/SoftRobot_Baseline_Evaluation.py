@@ -31,7 +31,7 @@ model_dir = case_dir / "model"
 print("Model dir", model_dir.resolve())
 
 # dataset type
-dataset_type = "train"
+dataset_type = "val"
 assert dataset_type in ["train", "val"], "Invalid dataset type."
 
 # define the simulation parameters
@@ -40,11 +40,11 @@ dt = 1e-3  # sampling time step
 control_dt = 1e-2  # control time step
 
 # plotting settings
-plot_position_skip = 6
-plot_marker_skip = 5
+plot_position_skip = 3
+plot_marker_skip = 1
 
 # load the trained model
-learned_model = keras.models.load_model(str(model_dir / 'learned_node_model.keras'), safe_mode=False)
+learned_model = keras.models.load_model(str(model_dir / 'learned_node_model_with_rollout.keras'), safe_mode=False)
 trainable_variables = learned_model.trainable_variables
 non_trainable_variables = learned_model.non_trainable_variables
 model_forward_fn = lambda x: learned_model.stateless_call(trainable_variables, non_trainable_variables, x)[0]
@@ -179,24 +179,24 @@ if __name__ == "__main__":
         case _:
             raise ValueError("Invalid dataset type.")
 
-    # # marker sub-sampling
-    # num_samples = chi_ts.shape[0]
-    # num_markers = chi_ts.shape[1] // 3
-    # print("Number of markers:", num_markers)
-    # marker_indices = onp.array([num_markers // 2, num_markers - 1])
-    # # marker_indices = np.array([num_markers - 1])
-    # print("Marker indices:", marker_indices)
-    # # reshape tensors
-    # chi_ts = chi_ts.reshape(num_samples, num_markers, 3)
-    # chi_d_ts = chi_d_ts.reshape(num_samples, num_markers, 3)
-    # chi_dd_ts = chi_dd_ts.reshape(num_samples, num_markers, 3)
-    # # sub-sample the data
-    # chi_ts = chi_ts[:, marker_indices, :].reshape(num_samples, -1)
-    # chi_d_ts = chi_d_ts[:, marker_indices, :].reshape(num_samples, -1)
-    # chi_dd_ts = chi_dd_ts[:, marker_indices, :].reshape(num_samples, -1)
-    # # update the number of markers
-    # num_markers = marker_indices.shape[0]
-    # n_chi = chi_ts.shape[-1]
+    # marker sub-sampling
+    num_samples = chi_ts.shape[0]
+    num_markers = chi_ts.shape[1] // 3
+    # marker_indices = jnp.array([num_markers - 1])
+    # marker_indices = jnp.array([num_markers // 2, num_markers - 1])
+    marker_indices = jnp.array([10, 15, 20])
+    print("Marker indices:", marker_indices)
+    # reshape tensors
+    chi_ts = chi_ts.reshape(num_samples, num_markers, 3)
+    chi_d_ts = chi_d_ts.reshape(num_samples, num_markers, 3)
+    chi_dd_ts = chi_dd_ts.reshape(num_samples, num_markers, 3)
+    # sub-sample the data
+    chi_ts = chi_ts[:, marker_indices, :].reshape(num_samples, -1)
+    chi_d_ts = chi_d_ts[:, marker_indices, :].reshape(num_samples, -1)
+    chi_dd_ts = chi_dd_ts[:, marker_indices, :].reshape(num_samples, -1)
+    # update the number of markers
+    num_markers = marker_indices.shape[0]
+    n_chi = chi_ts.shape[-1]
 
     # evaluate accelerations on the training data
     model_input = jnp.concatenate([chi_ts, chi_d_ts, tau_ts], axis=-1)

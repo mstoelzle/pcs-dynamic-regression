@@ -25,7 +25,7 @@ keras.utils.set_random_seed(0)
 dataset_dir = Path("Source") / "Soft Robot" / "ns-2_dof-3" / "training" / "cv"
 val_ratio = 0.2
 num_sequences = 400
-seq_dur = 0.1
+seq_dur = 0.3
 # model parameters
 model_type = "node"
 mlp_num_layers = 5
@@ -104,25 +104,26 @@ if __name__ == "__main__":
     dt = 1e-3
     ts = dt * jnp.arange(num_samples)
 
-    # # marker sub-sampling
+    # marker sub-sampling
     # print("Number of markers:", num_markers)
+    # marker_indices = jnp.array([num_markers - 1])
     # marker_indices = jnp.array([num_markers // 2, num_markers - 1])
-    # # marker_indices = jnp.array([num_markers - 1])
-    # print("Marker indices:", marker_indices)
-    # # reshape tensors
-    # Chi = Chi.reshape(num_samples, num_markers, 3)
-    # Chi_raw = Chi_raw.reshape(num_samples, num_markers, 3)
-    # Chi_d = Chi_d.reshape(num_samples, num_markers, 3)
-    # Chi_dd = Chi_dd.reshape(num_samples, num_markers, 3)
-    # # sub-sample the data
-    # Chi_raw = Chi_raw[:, marker_indices, :].reshape(num_samples, -1)
-    # Chi = Chi[:, marker_indices, :].reshape(num_samples, -1)
-    # Chi_d = Chi_d[:, marker_indices, :].reshape(num_samples, -1)
-    # Chi_dd = Chi_dd[:, marker_indices, :].reshape(num_samples, -1)
-    # # update the number of markers
-    # num_markers = marker_indices.shape[0]
-    # n_chi = Chi.shape[-1]
-
+    marker_indices = jnp.array([10, 15, 20])
+    print("Selected marker indices:", marker_indices)
+    # reshape tensors
+    Chi = Chi.reshape(num_samples, num_markers, 3)
+    Chi_raw = Chi_raw.reshape(num_samples, num_markers, 3)
+    Chi_d = Chi_d.reshape(num_samples, num_markers, 3)
+    Chi_dd = Chi_dd.reshape(num_samples, num_markers, 3)
+    # sub-sample the data
+    Chi_raw = Chi_raw[:, marker_indices, :].reshape(num_samples, -1)
+    Chi = Chi[:, marker_indices, :].reshape(num_samples, -1)
+    Chi_d = Chi_d[:, marker_indices, :].reshape(num_samples, -1)
+    Chi_dd = Chi_dd[:, marker_indices, :].reshape(num_samples, -1)
+    # update the number of markers
+    num_markers = marker_indices.shape[0]
+    print("Number of markers:", num_markers)
+    n_chi = Chi.shape[-1]
 
     # create sequences of 0.1s duration
     seq_len = int(seq_dur / dt)
@@ -183,25 +184,6 @@ if __name__ == "__main__":
     dynamics_model_input_for_normalization = jnp.concatenate([Chi, Chi_d, Tau], axis=-1)
     input_normalization_layer.adapt(dynamics_model_input_for_normalization)
 
-    # # normalize the output data
-    # chi_i_dd_norm_const = jnp.array([500, 500, 25000])
-    # chi_dd_norm_const = jnp.tile(chi_i_dd_norm_const, num_markers)
-    # normalization_kwargs = dict(
-    #     axis=-1,
-    #     mean=jnp.zeros(chi_dd_norm_const.shape[-1]),
-    #     variance=chi_dd_norm_const ** 2,
-    # )
-    # output_normalization_layer = keras.layers.Normalization(**normalization_kwargs)
-    # output_denormalization_layer = keras.layers.Normalization(
-    #     **normalization_kwargs,
-    #     invert=True,
-    # )
-    # y_norm = output_normalization_layer(y)
-    # y_norm_train = output_normalization_layer(y_train)
-    # y_norm_val = output_normalization_layer(y_val)
-    # print("After normalization: y_norm min:\n", y_norm.min(axis=0), "\ny_norm max:\n", y_norm.max(axis=0))
-
-
     match model_type:
         case "node":
             input_dim = 2*n_chi + n_tau
@@ -244,8 +226,8 @@ if __name__ == "__main__":
 
             # normalize the error
             norm_error_x = error_x / chi_norm_const
-            norm_error_x_d = error_x_d / chi_norm_const * (2 * dt)
-            norm_error_x_dd = error_x_dd / chi_norm_const * (2 * dt)**2
+            norm_error_x_d = error_x_d / chi_norm_const * (0.1 * dt)
+            norm_error_x_dd = error_x_dd / chi_norm_const * (0.1 * dt)**2
             
             norm_error = jnp.concatenate([norm_error_x, norm_error_x_d, norm_error_x_dd], axis=-1)
             loss = jnp.mean(jnp.square(norm_error), axis=-1)
