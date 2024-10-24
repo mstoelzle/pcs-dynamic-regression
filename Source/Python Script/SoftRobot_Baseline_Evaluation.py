@@ -31,7 +31,7 @@ model_dir = case_dir / "model"
 print("Model dir", model_dir.resolve())
 
 # dataset type
-dataset_type = "val"
+dataset_type = "train"
 assert dataset_type in ["train", "val"], "Invalid dataset type."
 
 # define the simulation parameters
@@ -222,6 +222,18 @@ if __name__ == "__main__":
     px_hat_ts = sim_ts["x_ts"][:, 0::3]
     py_hat_ts = sim_ts["x_ts"][:, 1::3]
     theta_hat_ts = sim_ts["x_ts"][:, 2::3]
+
+    position_error_mean = jnp.mean(jnp.linalg.norm(jnp.stack([px_gt_ts - px_hat_ts,py_gt_ts -  py_hat_ts], axis=-1), axis=-1))
+    print(f"Mean position error: {position_error_mean} m")
+    orientation_error_mean = jnp.mean(jnp.abs(theta_gt_ts - theta_hat_ts))
+    print(f"Mean orientation error: {orientation_error_mean} rad")
+
+    end_effector_position_error = jnp.mean(jnp.linalg.norm(jnp.stack([
+        px_gt_ts[..., -1] - px_hat_ts[..., -1], 
+        py_gt_ts[..., -1] - py_hat_ts[..., -1]
+    ], axis=-1), axis=-1))
+    print(f"Mean end-effector position error: {end_effector_position_error} m")
+    end_effector_orientation_error = jnp.mean(jnp.abs(theta_gt_ts[..., -1] - theta_hat_ts[..., -1]))
 
     # plot the x position
     fig, ax = plt.subplots(1, 1, dpi=200, num="x-position")
