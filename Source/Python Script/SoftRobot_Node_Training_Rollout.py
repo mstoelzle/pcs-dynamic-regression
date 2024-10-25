@@ -32,20 +32,45 @@ mlp_num_layers = 5
 mlp_hidden_dim = 256
 # training parameters
 lr = 5e-3
-batch_size = 64
-num_epochs = 3000
+batch_size = 128
+num_epochs = 2500
+
+# directory to save the model
+model_dir = dataset_dir.parent.parent / "model"
+model_dir.mkdir(parents=True, exist_ok=True)
+model_path = model_dir / f"learned_{model_type}_model_keras_train.keras"
+dynamics_model_path = model_dir / f"learned_{model_type}_model.keras"
 
 # random seed
 rng = random.PRNGKey(0)
 
 
+@keras.saving.register_keras_serializable()
 class OdeRollout(keras.Model):
-    def __init__(self, dynamics_model, state_dim: int, actuation_dim: int, dt: float):
-        super().__init__()
+    def __init__(self, dynamics_model: keras.Model, state_dim: int, actuation_dim: int, dt: float, **kwargs):
         self.state_dim = state_dim
         self.actuation_dim = actuation_dim
         self.dynamics_model = dynamics_model
         self.dt = dt
+        super().__init__(**kwargs)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "state_dim": self.state_dim,
+                "actuation_dim": self.actuation_dim,
+                "dynamics_model": keras.saving.serialize_keras_object(self.dynamics_model),
+                "dt": self.dt,
+            }
+        )
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        dynamics_model_config = config.pop("dynamics_model")
+        dynamics_model = keras.saving.deserialize_keras_object(dynamics_model_config)
+        return cls(dynamics_model, **config)
 
     def call(self, inputs):
         y_gt_seqs, tau_seqs = inputs[..., :self.state_dim], inputs[..., self.state_dim:]
@@ -217,6 +242,7 @@ if __name__ == "__main__":
     chi_i_norm_const = jnp.array([0.15, 0.15, 5])
     chi_norm_const = jnp.tile(chi_i_norm_const, num_markers)
 
+    @keras.saving.register_keras_serializable()
     class NormalizedMeanSquaredError(keras.losses.Loss):
         def call(self, y_true, y_pred):
             error = y_true - y_pred
@@ -250,7 +276,7 @@ if __name__ == "__main__":
     )
 
     callbacks = [
-        # keras.callbacks.ModelCheckpoint(filepath="model_at_epoch_{epoch}.keras"),
+        keras.callbacks.ModelCheckpoint(filepath=model_path, save_best_only=True),
         # keras.callbacks.EarlyStopping(monitor="val_loss", patience=10),
     ]
 
@@ -264,6 +290,13 @@ if __name__ == "__main__":
         callbacks=callbacks,
     )
 
+    # load the best model
+    model = keras.models.load_model(model_path)
+    # build the model
+    model.build(input_shape=(None, ) + x.shape[1:])
+    # extract the dynamics model
+    dynamics_model = model.dynamics_model
+
     score_train = model.evaluate(x_train, y_train, verbose=1)
     print("Training loss:", score_train)
     score_val = model.evaluate(x_val, y_val, verbose=1)
@@ -271,11 +304,6 @@ if __name__ == "__main__":
     score_tot = model.evaluate(x, y, verbose=1)
     print("Score on the entire dataset:", score_tot)
 
-    # directory to save the model
-    model_dir = dataset_dir.parent.parent / "model"
-    model_dir.mkdir(parents=True, exist_ok=True)
-    model_path = model_dir / f"learned_{model_type}_model_with_rollout.keras"
-
     # save the keras model
     print(f"Saving the model to {model_path.resolve()}")
-    dynamics_model.save(model_path)
+    dynamics_model.save(dynamics_model_path)
