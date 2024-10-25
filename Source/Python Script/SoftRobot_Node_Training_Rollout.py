@@ -230,7 +230,9 @@ if __name__ == "__main__":
             dynamics_model =keras.Sequential([
                 keras.layers.Input(shape=(input_dim,)),
                 input_normalization_layer,
-                ConDynamics(state_dim=2 * n_chi, input_dim=n_tau)
+                ConDynamics(
+                    state_dim=2 * n_chi, input_dim=n_tau, input_encoding_num_layers=5, input_encoding_hidden_dim=16,
+                ),
             ])
         case _:
             raise ValueError("Invalid model type")
