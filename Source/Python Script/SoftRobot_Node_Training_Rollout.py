@@ -36,7 +36,7 @@ mlp_hidden_dim = 256
 # training parameters
 lr = 5e-3
 batch_size = 128
-num_epochs = 2500
+num_epochs = 3000
 
 # directory to save the model
 model_dir = dataset_dir.parent.parent / "model"
