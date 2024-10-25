@@ -73,7 +73,7 @@ class OdeRollout(keras.Model):
     def from_config(cls, config):
         dynamics_model_config = config.pop("dynamics_model")
         dynamics_model = keras.saving.deserialize_keras_object(dynamics_model_config)
-        return cls(dynamics_model, **config)
+        return cls(dynamics_model=dynamics_model, **config)
 
     def call(self, inputs):
         y_gt_seqs, tau_seqs = inputs[..., :self.state_dim], inputs[..., self.state_dim:]
