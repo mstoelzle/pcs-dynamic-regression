@@ -122,6 +122,7 @@ class ConDynamics(keras.Model):
                 "input_dim": self.input_dim,
                 "input_encoding_num_layers": self.input_encoding_num_layers,
                 "input_encoding_hidden_dim": self.input_encoding_hidden_dim,
+                "use_state_encoder": self.state_encoder is not None,
             }
         )
         return config
