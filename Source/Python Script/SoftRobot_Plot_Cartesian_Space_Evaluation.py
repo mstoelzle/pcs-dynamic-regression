@@ -107,11 +107,18 @@ if __name__ == "__main__":
 
         # reshape the predicted data
         rollout_ts.update(dict(
-            chi_ts=
+            chi_ts=rollout_ts["chi_ts"].reshape(num_samples, -1, 3),
+            chi_d_ts=rollout_ts["chi_d_ts"].reshape(num_samples, -1, 3),
+            chi_dd_ts=rollout_ts["chi_dd_ts"].reshape(num_samples, -1, 3),
         ))
 
         if model_type == "pcs_regression":
             # sub-sample the data
+            rollout_ts.update(dict(
+                chi_ts=rollout_ts["chi_ts"][:, marker_indices, :],
+                chi_d_ts=rollout_ts["chi_d_ts"][:, marker_indices, :],
+                chi_dd_ts=rollout_ts["chi_dd_ts"][:, marker_indices, :],
+            ))
 
         rollout_ts_mdls[model_type] = rollout_ts
 
