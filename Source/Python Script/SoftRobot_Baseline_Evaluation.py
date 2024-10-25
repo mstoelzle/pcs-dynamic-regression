@@ -31,8 +31,12 @@ model_dir = case_dir / "model"
 print("Model dir", model_dir.resolve())
 
 # dataset type
-dataset_type = "val"
+dataset_type = "train"
 assert dataset_type in ["train", "val"], "Invalid dataset type."
+marker_indices = jnp.array([10, 15, 20])
+
+# model type
+model_type = "node"
 
 # define the simulation parameters
 sim_dt = 1e-5
@@ -184,7 +188,6 @@ if __name__ == "__main__":
     num_markers = chi_ts.shape[1] // 3
     # marker_indices = jnp.array([num_markers - 1])
     # marker_indices = jnp.array([num_markers // 2, num_markers - 1])
-    marker_indices = jnp.array([10, 15, 20])
     print("Marker indices:", marker_indices)
     # reshape tensors
     chi_ts = chi_ts.reshape(num_samples, num_markers, 3)
@@ -224,7 +227,7 @@ if __name__ == "__main__":
     print("y_d0:\n", y_d0)
 
     # simulate the learned dynamics on the training data
-    sim_ts = simulate_dynamics(
+    rollout_ts = simulate_dynamics(
         x0=chi_ts[0],
         x_d0=chi_d_ts[0],
         tau_ts=tau_ts[::int(control_dt/dt)],  # downsample the control inputs to 100 Hz
@@ -233,14 +236,18 @@ if __name__ == "__main__":
         control_dt=control_dt,  
         control_ts=ts[::int(control_dt/dt)],
     )
+    # save the simulation results
+    eval_dir = model_dir.parent / "evaluation"
+    eval_dir.mkdir(parents=True, exist_ok=True)
+    jnp.savez(str(eval_dir / f"rollout_{model_type}_{dataset_type}.npz"), **rollout_ts)
 
     # extract the data
     px_gt_ts = chi_ts[:, 0::3]
     py_gt_ts = chi_ts[:, 1::3]
     theta_gt_ts = chi_ts[:, 2::3]
-    px_hat_ts = sim_ts["x_ts"][:, 0::3]
-    py_hat_ts = sim_ts["x_ts"][:, 1::3]
-    theta_hat_ts = sim_ts["x_ts"][:, 2::3]
+    px_hat_ts = rollout_ts["x_ts"][:, 0::3]
+    py_hat_ts = rollout_ts["x_ts"][:, 1::3]
+    theta_hat_ts = rollout_ts["x_ts"][:, 2::3]
 
     position_error_mean = jnp.mean(jnp.linalg.norm(jnp.stack([px_gt_ts - px_hat_ts,py_gt_ts -  py_hat_ts], axis=-1), axis=-1))
     print(f"Mean position error: {position_error_mean} m")
