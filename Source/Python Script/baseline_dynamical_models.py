@@ -1,3 +1,4 @@
+import jax
 from jax import Array, debug, random, vmap
 import jax.numpy as jnp
 import keras
@@ -212,3 +213,124 @@ class ConDynamics(keras.Model):
         # u = vmap(lambda _V, _tau: _V @ _tau)(V, tau)
 
         return u
+#
+#
+class LnnDynamics(keras.Model):
+    def __init__(
+        self,
+        state_dim: int,
+        input_dim: int,
+        learn_dissipation=True,
+        learn_input_matrix=True,
+        num_layers=5,
+        hidden_dim=32,
+        nonlinearity=keras.activations.softplus,
+        diag_shift=1e-6,
+        diag_eps=2e-6,
+        **kwargs
+    ):
+        super(LnnDynamics, self).__init__(**kwargs)
+        self.state_dim = state_dim
+        self.configuration_dim = state_dim // 2
+        self.input_dim = input_dim
+        self.learn_dissipation = learn_dissipation
+        self.learn_input_matrix = learn_input_matrix
+        self.num_layers = num_layers
+        self.hidden_dim = hidden_dim
+        self.nonlinearity = nonlinearity
+        self.diag_shift = diag_shift
+        self.diag_eps = diag_eps
+
+        self.mass_matrix_nn = self.build_mass_matrix_nn()
+        self.potential_energy_fn = self.build_potential_energy_nn()
+        if self.learn_dissipation:
+            self.damping_matrix_nn = self.build_damping_matrix_nn()
+        if self.learn_input_matrix:
+            self.input_matrix_nn = keras.layers.Dense(self.configuration_dim, use_bias=False)
+
+    def build_mass_matrix_nn(self):
+        model = keras.Sequential([keras.layers.Input(shape=(self.configuration_dim,))])
+        for _ in range(self.num_layers):
+            model.add(keras.layers.Dense(self.hidden_dim, activation=self.nonlinearity))
+        model.add(keras.layers.Dense(self.configuration_dim * self.configuration_dim))
+        return model
+
+    def build_potential_energy_nn(self):
+        model = keras.Sequential()
+        for _ in range(self.num_layers):
+            model.add(keras.layers.Dense(self.hidden_dim, activation=self.nonlinearity))
+        model.add(keras.layers.Dense(1))
+        return model
+
+    def build_damping_matrix_nn(self):
+        model = keras.Sequential()
+        for _ in range(self.num_layers):
+            model.add(keras.layers.Dense(self.hidden_dim, activation=self.nonlinearity))
+        model.add(keras.layers.Dense(self.configuration_dim * self.configuration_dim))
+        return model
+
+    def get_config(self):
+        config = super().get_config()
+        config.update(
+            {
+                "state_dim": self.state_dim,
+                "input_dim": self.input_dim,
+                "learn_dissipation": self.learn_dissipation,
+                "learn_input_matrix": self.learn_input_matrix,
+                "num_layers": self.num_layers,
+                "hidden_dim": self.hidden_dim,
+                "nonlinearity": keras.saving.serialize_keras_object(self.nonlinearity),
+                "diag_shift": self.diag_shift,
+                "diag_eps": self.diag_eps,
+            }
+        )
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        nonlinearity_config = config.pop("nonlinearity")
+        nonlinearity = keras.saving.deserialize_keras_object(nonlinearity_config)
+        return cls(nonlinearity=nonlinearity, **config)
+
+    def call(self, inputs):
+        y, tau = inputs[..., :self.state_dim], inputs[..., self.state_dim:]
+        x, x_d = y[..., :self.configuration_dim], y[..., self.configuration_dim:]
+
+        def kinetic_energy_fn(_x: Array, _x_d: Array):
+            _M = self.mass_matrix_nn(_x).reshape(self.configuration_dim, self.configuration_dim)
+            _T = 0.5 * jnp.dot(_x_d, jnp.dot(_M, _x_d))
+            return _T
+
+        def potential_energy_fn(_x: Array):
+            _U = self.potential_energy_fn(_x)
+            return _U
+
+        def lnn_dynamics_fn(_x: Array, _x_d: Array, _tau: Array):
+            assert _x.ndim == 1, f"Expected input to have shape (n_q, ), got {_x.shape}"
+            assert _x_d.ndim == 1, f"Expected input to have shape (n_q, ), got {_x_d.shape}"
+            assert _tau.ndim == 1, f"Expected input to have shape (n_tau, ), got {_tau.shape}"
+
+            tau_pot = jax.grad(potential_energy_fn)(_x)
+            kinetic_energy_hessian_fn = jax.hessian(kinetic_energy_fn, argnums=(0, 1))
+            _, (d2L_dth_dthd, M) = kinetic_energy_hessian_fn(_x, _x_d)
+            tau_corioli = jnp.dot(d2L_dth_dthd, _x_d)
+
+            _x_dd = ops.linalg.inv(M) @ (_tau - tau_corioli - tau_pot - tau_d)
+
+            return _x_dd
+
+        if self.learn_dissipation:
+            D = self.damping_matrix_nn(x).reshape(self.configuration_dim, self.configuration_dim)
+            tau_d = jnp.dot(D, x_d)
+        else:
+            tau_d = jnp.zeros_like(x)
+
+        if self.learn_input_matrix:
+            tau_ext = self.input_matrix_nn(tau)
+        else:
+            tau_ext = tau
+
+        x_dd = vmap(lnn_dynamics_fn)(x, x_d, tau_ext)
+
+
+        return x_dd
