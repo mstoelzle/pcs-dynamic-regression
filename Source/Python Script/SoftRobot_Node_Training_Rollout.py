@@ -24,11 +24,11 @@ keras.utils.set_random_seed(0)
 # dataset parameters
 dataset_dir = Path("Source") / "Soft Robot" / "ns-2_dof-3" / "training" / "cv"
 val_ratio = 0.2
-num_sequences = 400
+num_sequences = 1000
 seq_dur = 0.3
 # model parameters
 model_type = "node"
-mlp_num_layers = 5
+mlp_num_layers = 6
 mlp_hidden_dim = 256
 # training parameters
 lr = 5e-3

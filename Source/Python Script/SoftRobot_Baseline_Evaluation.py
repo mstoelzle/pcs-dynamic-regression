@@ -48,7 +48,7 @@ plot_position_skip = 3
 plot_marker_skip = 1
 
 # load the trained model
-learned_model = keras.models.load_model(str(model_dir / 'learned_node_model_with_rollout.keras'), safe_mode=False)
+learned_model = keras.models.load_model(str(model_dir / 'learned_node_model.keras'), safe_mode=False)
 trainable_variables = learned_model.trainable_variables
 non_trainable_variables = learned_model.non_trainable_variables
 model_forward_fn = lambda x: learned_model.stateless_call(trainable_variables, non_trainable_variables, x)[0]
