@@ -18,6 +18,8 @@ from pathlib import Path
 from scipy.signal import savgol_filter
 from typing import Callable, Dict, Optional
 
+from baseline_dynamical_models import ConDynamics
+
 
 # Set the seed using keras.utils.set_random_seed. This will set:
 # 1) `numpy` seed
@@ -213,6 +215,17 @@ if __name__ == "__main__":
         ax.plot(ts, Chi_dd_hat[:, i], linewidth=2.0, label=r"$\hat{\ddot{\chi}}_{" + str(i + 1) + "}$")
     ax.set_xlabel("Time [s]")
     ax.set_ylabel(r"Acceleration [m/s$^2$]")
+    ax.grid(True)
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
+
+    # plot the torques
+    fig, ax = plt.subplots(1, 1, dpi=200, num="torques")
+    for i in range(tau_ts.shape[-1]):
+        ax.plot(ts, tau_ts[:, i], linewidth=2.0, label=r"$\tau_{" + str(i + 1) + "}$")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Torque")
     ax.grid(True)
     ax.legend()
     plt.tight_layout()
