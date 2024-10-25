@@ -1,6 +1,7 @@
 from jax import Array, debug, random, vmap
 import jax.numpy as jnp
 import keras
+from keras import ops
 
 
 def generate_positive_definite_matrix_from_params(
@@ -18,18 +19,18 @@ def generate_positive_definite_matrix_from_params(
     """
     # construct upper triangular matrix
     # https://github.com/google/jax/discussions/10146
-    u = jnp.concatenate([a, a[n:][::-1]])
+    u = ops.concatenate([a, a[n:][::-1]])
     U = u.reshape((n, n))
 
     # Set the elements below the diagonal to zero
-    U = jnp.triu(U, k=0)
+    U = ops.triu(U, k=0)
 
     # make sure that the diagonal entries are positive
-    u_diag = jnp.diag(U)
+    u_diag = ops.diag(U)
     # apply shift, softplus, and epsilon
     new_u_diag = keras.activations.softplus(u_diag + diag_shift) + diag_eps
     # update diagonal
-    U = U - jnp.diag(u_diag) + jnp.diag(new_u_diag)
+    U = U - ops.diag(u_diag) + ops.diag(new_u_diag)
 
     # reverse Cholesky decomposition
     A = U.transpose() @ U
@@ -44,6 +45,7 @@ class ConDynamics(keras.Model):
         input_dim: int,
         input_encoding_num_layers: int = 5,
         input_encoding_hidden_dim: int = 32,
+        use_state_encoder: bool = True,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -54,6 +56,12 @@ class ConDynamics(keras.Model):
         self.input_encoding_num_layers = input_encoding_num_layers
         self.input_encoding_hidden_dim = input_encoding_hidden_dim
         self.diag_shift, self.diag_eps = 1e-6, 2e-6
+
+        if use_state_encoder:
+            # linear encoder
+            self.state_encoder = keras.layers.Dense(self.network_dim, kernel_initializer="identity", bias_initializer="zeros")
+        else:
+            self.state_encoder = None
 
         # number of params in B_w / B_w_inv matrix
         num_b_w_params = int((self.network_dim ** 2 + self.network_dim) / 2)
@@ -94,17 +102,17 @@ class ConDynamics(keras.Model):
 
         if self.input_dim > 0:
             if input_encoding_num_layers > 0:
-                V_layers = [keras.layers.InputLayer(input_shape=(self.input_dim, ))]
+                V_layers = [keras.layers.Input(shape=(self.input_dim, ))]
                 for _ in range(input_encoding_num_layers - 1):
                     V_layers.append(keras.layers.Dense(input_encoding_hidden_dim, activation="tanh"))
                 V_layers.append(keras.layers.Dense(self.network_dim * self.input_dim))
                 self.V_nn = keras.Sequential(V_layers)
             elif self.network_dim== self.input_dim:
-                self.V_nn = lambda tau: jnp.eye(self.network_dim)[None, ...].repeat(tau.shape[0], axis=0)
+                self.V_nn = lambda tau: ops.eye(self.network_dim)[None, ...].repeat(tau.shape[0], axis=0)
             else:
-                self.V_nn = lambda tau: jnp.zeros((tau.shape[0], self.network_dim, self.input_dim))
+                self.V_nn = lambda tau: ops.zeros((tau.shape[0], self.network_dim, self.input_dim))
         else:
-            self.V_nn = lambda tau: jnp.zeros_like(tau)
+            self.V_nn = lambda tau: ops.zeros_like(tau)
 
     def get_config(self):
         config = super().get_config()
@@ -126,6 +134,12 @@ class ConDynamics(keras.Model):
         batch_size = inputs.shape[0]
         y, tau = inputs[..., :self.state_dim], inputs[..., self.state_dim:]
         x, x_d = y[..., :self.network_dim], y[..., self.network_dim:]
+
+        if self.state_encoder is not None:
+            z = self.state_encoder(x)
+            z_d = ops.matmul(x_d, self.state_encoder.kernel)
+        else:
+            z, z_d = x, x_d
 
         # compute the oscillator network input
         u = self.encode_input(tau)
@@ -151,14 +165,14 @@ class ConDynamics(keras.Model):
         )[None, ...].repeat(batch_size, axis=0)
 
         # eigenvalues of the matrix
-        # eig = jnp.linalg.eigh(Gamma_w)[0]
+        # eig = ops.linalg.eigh(Gamma_w)[0]
         # print(f"Eigenvalues: {eig}")
         # debug.print("Eigenvalues: {eig}", eig=eig)
 
         # print("u", u[0])
         # print("Gamma w times x", Gamma_w[0] @ x[0])
         # print("E w times x_d", E_w[0] @ x_d[0])
-        # print("tanh x", jnp.tanh(x[0] + self.bias))
+        # print("tanh x", ops.tanh(x[0] + self.bias))
 
         # compute the acceleration of the oscillator network
         # x_dd = vmap(
@@ -166,16 +180,23 @@ class ConDynamics(keras.Model):
         #         _u
         #         - Gamma_w @ _x
         #         - E_w @ _x_d
-        #         -jnp.tanh(_x + self.bias)
+        #         -ops.tanh(_x + self.bias)
         #     )
         # )(x, x_d, u)
-        x_dd = jnp.einsum("bij,bj->bi",
+        z_dd = ops.einsum("bij,bj->bi",
             B_w_inv,
             u
-            - jnp.einsum("bij,bj->bi", Gamma_w, x)
-            - jnp.einsum("bij,bj->bi", E_w, x_d)
-            - jnp.tanh(x + self.bias)
+            - ops.einsum("bij,bj->bi", Gamma_w, z)
+            - ops.einsum("bij,bj->bi", E_w, z_d)
+            - ops.tanh(z + self.bias)
         )
+
+        if self.state_encoder is not None:
+            x_dd = ops.matmul(z_dd, ops.linalg.inv(self.state_encoder.kernel))
+        else:
+            x_dd = z_dd
+
+        # print("z_dd mean", z_dd.mean(), "x_dd", x_dd.mean())
 
         return x_dd
 
@@ -185,7 +206,7 @@ class ConDynamics(keras.Model):
 
     def encode_input(self, tau: Array):
         V = self.input_state_coupling(tau)
-        u = jnp.einsum("bij,bj->bi", V, tau)
+        u = ops.einsum("bij,bj->bi", V, tau)
         # u = V @ tau[: self.input_dim]
         # u = vmap(lambda _V, _tau: _V @ _tau)(V, tau)
 
