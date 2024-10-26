@@ -319,7 +319,7 @@ class LnnDynamics(keras.Model):
         m = self.mass_matrix_nn(x[None, ...]).squeeze(axis=0)
         # construct the mass matrix
         M = generate_positive_definite_matrix_from_params(
-            self.configuration_dim, m, diag_shift=self.diag_shift, diag_eps=self.diag_eps
+            self.configuration_dim, m, diag_shift=self.diag_shift, diag_eps=1e0  # self.diag_eps
         )
         return M
 
@@ -360,14 +360,11 @@ class LnnDynamics(keras.Model):
 
         # compute the input mapping
         tau_ext = self.encode_input(tau)
-        print("tau = ", tau[0], "tau_ext = ", tau_ext[0])
 
         def lnn_dynamics_fn(_x: Array, _x_d: Array, _tau: Array):
             assert _x.ndim == 1, f"Expected input to have shape (n_q, ), got {_x.shape}"
             assert _x_d.ndim == 1, f"Expected input to have shape (n_q, ), got {_x_d.shape}"
             assert _tau.ndim == 1, f"Expected input to have shape (n_tau, ), got {_tau.shape}"
-
-            debug.print("_x = {x}, _x_d = {x_d}, _tau = {tau}", x=_x, x_d=_x_d, tau=_tau)
 
             tau_pot = jax.grad(self.get_potential_energy)(_x)
             kinetic_energy_hessian_fn = jax.hessian(self.get_kinetic_energy, argnums=(0, 1))
@@ -380,15 +377,8 @@ class LnnDynamics(keras.Model):
             else:
                 tau_d = jnp.zeros_like(_x)
 
-            debug.print("tau_pot = {tau_pot}, tau_d = {tau_d}, tau_coriolis = {tau_coriolis}", tau_pot=tau_pot, tau_d=tau_d, tau_coriolis=tau_coriolis)
-
-            lambdas = jnp.linalg.eigh(M)[0]
-            debug.print("Eigenvalues of M: {lambdas}", lambdas=lambdas)
+            # compute the inverse of the mass matrix
             M_inv = ops.linalg.inv(M)
-            lambda_M_inv = jnp.linalg.eigh(M_inv)[0]
-            debug.print("Eigenvalues of M_inv: {lambda_M_inv}", lambda_M_inv=lambda_M_inv)
-
-            debug.print("Total torque = {tau_tot}", tau_tot=(_tau - tau_coriolis - tau_pot - tau_d))
 
             _x_dd = M_inv @ (_tau - tau_coriolis - tau_pot - tau_d)
 
