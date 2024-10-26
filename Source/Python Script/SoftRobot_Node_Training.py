@@ -6,10 +6,13 @@ os.environ["KERAS_BACKEND"] = "jax"
 # Note that Keras should only be imported after the backend
 # has been configured. The backend cannot be changed once the
 # package is imported.
+import jax.numpy as jnp
 import keras
 import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy.signal import savgol_filter
+
+from baseline_dynamical_models import ConDynamics, LnnDynamics, generate_positive_definite_matrix_from_params
 
 
 # Set the seed using keras.utils.set_random_seed. This will set:
@@ -24,6 +27,7 @@ dataset_dir = Path("Source") / "Soft Robot" / "ns-2_dof-3" / "training" / "cv"
 val_ratio = 0.2
 # model parameters
 model_type = "node"
+assert model_type in ["node", "con", "lnn"]
 mlp_num_layers = 5
 mlp_hidden_dim = 256
 # training parameters
@@ -72,24 +76,26 @@ if __name__ == "__main__":
     # axes[1].grid(True)
     # plt.show()
 
-    # # marker sub-sampling
+    # marker sub-sampling
     # print("Number of markers:", num_markers)
-    # marker_indices = np.array([num_markers // 2, num_markers - 1])
-    # # marker_indices = np.array([num_markers - 1])
-    # print("Marker indices:", marker_indices)
-    # # reshape tensors
-    # Chi = Chi.reshape(num_samples, num_markers, 3)
-    # Chi_raw = Chi_raw.reshape(num_samples, num_markers, 3)
-    # Chi_d = Chi_d.reshape(num_samples, num_markers, 3)
-    # Chi_dd = Chi_dd.reshape(num_samples, num_markers, 3)
-    # # sub-sample the data
-    # Chi_raw = Chi_raw[:, marker_indices, :].reshape(num_samples, -1)
-    # Chi = Chi[:, marker_indices, :].reshape(num_samples, -1)
-    # Chi_d = Chi_d[:, marker_indices, :].reshape(num_samples, -1)
-    # Chi_dd = Chi_dd[:, marker_indices, :].reshape(num_samples, -1)
-    # # update the number of markers
-    # num_markers = marker_indices.shape[0]
-    # n_chi = Chi.shape[-1]
+    # marker_indices = jnp.array([num_markers - 1])
+    # marker_indices = jnp.array([num_markers // 2, num_markers - 1])
+    marker_indices = jnp.array([10, 15, 20])
+    print("Selected marker indices:", marker_indices)
+    # reshape tensors
+    Chi = Chi.reshape(num_samples, num_markers, 3)
+    Chi_raw = Chi_raw.reshape(num_samples, num_markers, 3)
+    Chi_d = Chi_d.reshape(num_samples, num_markers, 3)
+    Chi_dd = Chi_dd.reshape(num_samples, num_markers, 3)
+    # sub-sample the data
+    Chi_raw = Chi_raw[:, marker_indices, :].reshape(num_samples, -1)
+    Chi = Chi[:, marker_indices, :].reshape(num_samples, -1)
+    Chi_d = Chi_d[:, marker_indices, :].reshape(num_samples, -1)
+    Chi_dd = Chi_dd[:, marker_indices, :].reshape(num_samples, -1)
+    # update the number of markers
+    num_markers = marker_indices.shape[0]
+    print("Number of markers:", num_markers)
+    n_chi = Chi.shape[-1]
 
     # # smooth the data
     # Chi, Chi_d, Chi_dd = [], [], []
@@ -243,7 +249,7 @@ if __name__ == "__main__":
     axes[2].set_title("Validation data")
     plt.show()
 
-
+    input_dim = 2 * n_chi + n_tau
     match model_type:
         case "node":
             input_dim = x.shape[-1]
@@ -258,6 +264,22 @@ if __name__ == "__main__":
             layers.append(keras.layers.Dense(output_dim))
 
             model = keras.Sequential(layers)
+        case "con":
+            model = keras.Sequential([
+                keras.layers.Input(shape=(input_dim,)),
+                input_normalization_layer,
+                ConDynamics(
+                    state_dim=2 * n_chi, input_dim=n_tau, input_encoding_num_layers=5, input_encoding_hidden_dim=16,
+                ),
+            ])
+        case "lnn":
+            model = keras.Sequential([
+                keras.layers.Input(shape=(input_dim,)),
+                input_normalization_layer,
+                LnnDynamics(
+                    state_dim=2 * n_chi, input_dim=n_tau, num_layers=mlp_num_layers, hidden_dim=mlp_hidden_dim,
+                ),
+            ])
         case _:
             raise ValueError("Invalid model type")
     model.summary()

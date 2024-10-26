@@ -11,9 +11,8 @@ import jax.numpy as jnp
 import keras
 import matplotlib.pyplot as plt
 from pathlib import Path
-from scipy.signal import savgol_filter
 
-from baseline_dynamical_models import ConDynamics
+from baseline_dynamical_models import ConDynamics, LnnDynamics, generate_positive_definite_matrix_from_params
 
 
 # Set the seed using keras.utils.set_random_seed. This will set:
