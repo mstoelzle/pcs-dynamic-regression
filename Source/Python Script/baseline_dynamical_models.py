@@ -242,7 +242,8 @@ class LnnDynamics(keras.Model):
         self.potential_energy_nn = self.build_potential_energy_nn()
         if self.learn_dissipation:
             self.d = self.build_damping_matrix()
-        self.V_nn = self.build_input_mapping()
+        # self.V_nn = self.build_input_mapping(self.num_layers, self.hidden_dim)
+        self.V_nn = self.build_input_mapping(0, self.hidden_dim)
 
     def build_mass_matrix_nn(self):
         # number of parameters in the mass matrix
@@ -274,20 +275,26 @@ class LnnDynamics(keras.Model):
 
         return d
 
-    def build_input_mapping(self):
+    def build_input_mapping(self, num_layers: int, hidden_dim: int):
         if self.input_dim > 0:
-            if self.num_layers > 0:
+            if num_layers > 0:
                 V_layers = [keras.layers.Input(shape=(self.input_dim, ))]
-                for _ in range(self.num_layers - 1):
-                    V_layers.append(keras.layers.Dense(self.hidden_dim, activation="tanh"))
+                for _ in range(num_layers - 1):
+                    V_layers.append(keras.layers.Dense(hidden_dim, activation="tanh"))
                 V_layers.append(keras.layers.Dense(self.configuration_dim * self.input_dim))
                 V_nn = keras.Sequential(V_layers)
-            elif self.configuration_dim== self.input_dim:
-                V_nn = lambda tau: ops.eye(self.configuration_dim)[None, ...].repeat(tau.shape[0], axis=0)
             else:
-                V_nn = lambda tau: ops.zeros((tau.shape[0], self.configuration_dim, self.input_dim))
+                self.v = self.add_weight(
+                    shape=(self.configuration_dim, self.input_dim),
+                    # initializer="glorot_normal",
+                    initializer="identity",
+                    trainable=True,
+                    name="input_state_coupling",
+                )
+                V_nn = lambda tau: self.v[None, :, :].repeat(tau.shape[0], axis=0)
         else:
             V_nn = lambda tau: ops.zeros_like(tau)
+
         return V_nn
 
     def get_config(self):
