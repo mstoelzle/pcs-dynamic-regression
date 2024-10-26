@@ -39,7 +39,7 @@ marker_indices = jnp.array([10, 15, 20])
 
 # model type
 model_type = "node"
-assert model_type in ["pcs_regression", "node", "lstm", "con"], "Invalid model type."
+assert model_type in ["pcs_regression", "node", "lstm", "con", "lnn"], "Invalid model type."
 
 # define the simulation parameters
 sim_dt = 1e-5

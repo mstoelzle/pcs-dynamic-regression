@@ -33,7 +33,13 @@ mlp_hidden_dim = 256
 # training parameters
 lr = 1e-3
 batch_size = 256
-num_epochs = 1000
+num_epochs = 2000
+
+# directory to save the model
+model_dir = dataset_dir.parent.parent / "model"
+model_dir.mkdir(parents=True, exist_ok=True)
+model_path = model_dir / f"learned_{model_type}_model.keras"
+norm_model_path = model_dir / f"learned_{model_type}_model_norm.keras"
 
 
 if __name__ == "__main__":
@@ -293,7 +299,7 @@ if __name__ == "__main__":
     )
 
     callbacks = [
-        # keras.callbacks.ModelCheckpoint(filepath="model_at_epoch_{epoch}.keras"),
+        keras.callbacks.ModelCheckpoint(filepath=norm_model_path, monitor="loss", save_best_only=True),
         # keras.callbacks.EarlyStopping(monitor="val_loss", patience=10),
     ]
 
@@ -306,6 +312,11 @@ if __name__ == "__main__":
         # validation_data=(x_val, y_norm_val),
         callbacks=callbacks,
     )
+
+    # load the best model
+    model = keras.models.load_model(norm_model_path)
+    # build the model
+    model.build(input_shape=(None,) + x.shape[1:])
 
     score_train = model.evaluate(x_train, y_norm_train, verbose=1)
     print("Training loss:", score_train)
@@ -323,11 +334,6 @@ if __name__ == "__main__":
     )
     # print("sample output before denormalization:", model.predict(x[:1]))
     # print("sample output after denormalization:", model_with_denormalization.predict(x[:1]))
-
-    # directory to save the model
-    model_dir = dataset_dir.parent.parent / "model"
-    model_dir.mkdir(parents=True, exist_ok=True)
-    model_path = model_dir / f"learned_{model_type}_model.keras"
 
     # save the keras model
     print(f"Saving the model to {model_path.resolve()}")
