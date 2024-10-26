@@ -20,8 +20,8 @@ def generate_positive_definite_matrix_from_params(
     """
     # construct upper triangular matrix
     # https://github.com/google/jax/discussions/10146
-    u = ops.concatenate([a, a[n:][::-1]])
-    U = u.reshape((n, n))
+    u = ops.concatenate([a, a[..., n:][..., ::-1]], axis=-1)
+    U = u.reshape(a.shape[:-1] + (n, n))
 
     # Set the elements below the diagonal to zero
     U = ops.triu(U, k=0)
@@ -213,20 +213,18 @@ class ConDynamics(keras.Model):
         # u = vmap(lambda _V, _tau: _V @ _tau)(V, tau)
 
         return u
-#
-#
+
 class LnnDynamics(keras.Model):
     def __init__(
         self,
         state_dim: int,
         input_dim: int,
-        learn_dissipation=True,
-        learn_input_matrix=True,
-        num_layers=5,
-        hidden_dim=32,
+        learn_dissipation: bool = True,
+        num_layers: int = 5,
+        hidden_dim: int = 32,
         nonlinearity=keras.activations.softplus,
-        diag_shift=1e-6,
-        diag_eps=2e-6,
+        diag_shift: float = 1e-6,
+        diag_eps: float = 2e-6,
         **kwargs
     ):
         super(LnnDynamics, self).__init__(**kwargs)
@@ -234,7 +232,6 @@ class LnnDynamics(keras.Model):
         self.configuration_dim = state_dim // 2
         self.input_dim = input_dim
         self.learn_dissipation = learn_dissipation
-        self.learn_input_matrix = learn_input_matrix
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
         self.nonlinearity = nonlinearity
@@ -242,17 +239,19 @@ class LnnDynamics(keras.Model):
         self.diag_eps = diag_eps
 
         self.mass_matrix_nn = self.build_mass_matrix_nn()
-        self.potential_energy_fn = self.build_potential_energy_nn()
+        self.potential_energy_nn = self.build_potential_energy_nn()
         if self.learn_dissipation:
-            self.damping_matrix_nn = self.build_damping_matrix_nn()
-        if self.learn_input_matrix:
-            self.input_matrix_nn = keras.layers.Dense(self.configuration_dim, use_bias=False)
+            self.d = self.build_damping_matrix()
+        self.V_nn = self.build_input_mapping()
 
     def build_mass_matrix_nn(self):
+        # number of parameters in the mass matrix
+        num_m_elements = int((self.configuration_dim ** 2 + self.configuration_dim) / 2)
+
         model = keras.Sequential([keras.layers.Input(shape=(self.configuration_dim,))])
         for _ in range(self.num_layers):
             model.add(keras.layers.Dense(self.hidden_dim, activation=self.nonlinearity))
-        model.add(keras.layers.Dense(self.configuration_dim * self.configuration_dim))
+        model.add(keras.layers.Dense(num_m_elements))
         return model
 
     def build_potential_energy_nn(self):
@@ -262,12 +261,34 @@ class LnnDynamics(keras.Model):
         model.add(keras.layers.Dense(1))
         return model
 
-    def build_damping_matrix_nn(self):
-        model = keras.Sequential()
-        for _ in range(self.num_layers):
-            model.add(keras.layers.Dense(self.hidden_dim, activation=self.nonlinearity))
-        model.add(keras.layers.Dense(self.configuration_dim * self.configuration_dim))
-        return model
+    def build_damping_matrix(self):
+        # we learn the positive-definite parameters of the damping matrix
+        num_d_params = int((self.configuration_dim ** 2 + self.configuration_dim) / 2)
+        # register the weights
+        d = self.add_weight(
+            shape=(num_d_params,),
+            initializer="glorot_normal",
+            trainable=True,
+            name="damping_matrix",
+        )
+
+        return d
+
+    def build_input_mapping(self):
+        if self.input_dim > 0:
+            if self.num_layers > 0:
+                V_layers = [keras.layers.Input(shape=(self.input_dim, ))]
+                for _ in range(self.num_layers - 1):
+                    V_layers.append(keras.layers.Dense(self.hidden_dim, activation="tanh"))
+                V_layers.append(keras.layers.Dense(self.configuration_dim * self.input_dim))
+                V_nn = keras.Sequential(V_layers)
+            elif self.configuration_dim== self.input_dim:
+                V_nn = lambda tau: ops.eye(self.configuration_dim)[None, ...].repeat(tau.shape[0], axis=0)
+            else:
+                V_nn = lambda tau: ops.zeros((tau.shape[0], self.configuration_dim, self.input_dim))
+        else:
+            V_nn = lambda tau: ops.zeros_like(tau)
+        return V_nn
 
     def get_config(self):
         config = super().get_config()
@@ -276,7 +297,6 @@ class LnnDynamics(keras.Model):
                 "state_dim": self.state_dim,
                 "input_dim": self.input_dim,
                 "learn_dissipation": self.learn_dissipation,
-                "learn_input_matrix": self.learn_input_matrix,
                 "num_layers": self.num_layers,
                 "hidden_dim": self.hidden_dim,
                 "nonlinearity": keras.saving.serialize_keras_object(self.nonlinearity),
@@ -292,45 +312,88 @@ class LnnDynamics(keras.Model):
         nonlinearity = keras.saving.deserialize_keras_object(nonlinearity_config)
         return cls(nonlinearity=nonlinearity, **config)
 
+    def get_mass_matrix(self, x: Array) -> Array:
+        assert x.shape == (self.configuration_dim,), f"Expected input to have shape (n_q, ), got {x.shape}"
+
+        # the elements of the triangular matrix
+        m = self.mass_matrix_nn(x[None, ...]).squeeze(axis=0)
+        # construct the mass matrix
+        M = generate_positive_definite_matrix_from_params(
+            self.configuration_dim, m, diag_shift=self.diag_shift, diag_eps=self.diag_eps
+        )
+        return M
+
+    def get_kinetic_energy(self, x: Array, x_d: Array) -> Array:
+        assert x.shape == x_d.shape, f"Expected input to have the same shape, got {x.shape} and {x_d.shape}"
+        assert x.shape == (self.configuration_dim, ), f"Expected input to have shape (n_q, ), got {x.shape}"
+
+        M = self.get_mass_matrix(x)
+        T = 0.5 * ops.dot(x_d, ops.dot(M, x_d))
+        return T
+
+    def get_potential_energy(self, x: Array) -> Array:
+        assert x.shape == (self.configuration_dim,), f"Expected input to have shape (n_q, ), got {x.shape}"
+
+        U = self.potential_energy_nn(x[None, ...]).squeeze(axis=(0, -1))
+        return U
+
+    def get_damping_matrix(self) -> Array:
+        # construct the mass matrix
+        D = generate_positive_definite_matrix_from_params(
+            self.configuration_dim, self.d, diag_shift=self.diag_shift, diag_eps=self.diag_eps
+        )
+        return D
+
+    def input_state_coupling(self, tau: Array) -> Array:
+        V = self.V_nn(tau).reshape(-1, self.configuration_dim, self.input_dim)
+        return V
+
+    def encode_input(self, tau: Array):
+        V = self.input_state_coupling(tau)
+        u = ops.einsum("bij,bj->bi", V, tau)\
+
+        return u
+
     def call(self, inputs):
         y, tau = inputs[..., :self.state_dim], inputs[..., self.state_dim:]
         x, x_d = y[..., :self.configuration_dim], y[..., self.configuration_dim:]
 
-        def kinetic_energy_fn(_x: Array, _x_d: Array):
-            _M = self.mass_matrix_nn(_x).reshape(self.configuration_dim, self.configuration_dim)
-            _T = 0.5 * jnp.dot(_x_d, jnp.dot(_M, _x_d))
-            return _T
-
-        def potential_energy_fn(_x: Array):
-            _U = self.potential_energy_fn(_x)
-            return _U
+        # compute the input mapping
+        tau_ext = self.encode_input(tau)
+        print("tau = ", tau[0], "tau_ext = ", tau_ext[0])
 
         def lnn_dynamics_fn(_x: Array, _x_d: Array, _tau: Array):
             assert _x.ndim == 1, f"Expected input to have shape (n_q, ), got {_x.shape}"
             assert _x_d.ndim == 1, f"Expected input to have shape (n_q, ), got {_x_d.shape}"
             assert _tau.ndim == 1, f"Expected input to have shape (n_tau, ), got {_tau.shape}"
 
-            tau_pot = jax.grad(potential_energy_fn)(_x)
-            kinetic_energy_hessian_fn = jax.hessian(kinetic_energy_fn, argnums=(0, 1))
-            _, (d2L_dth_dthd, M) = kinetic_energy_hessian_fn(_x, _x_d)
-            tau_corioli = jnp.dot(d2L_dth_dthd, _x_d)
+            debug.print("_x = {x}, _x_d = {x_d}, _tau = {tau}", x=_x, x_d=_x_d, tau=_tau)
 
-            _x_dd = ops.linalg.inv(M) @ (_tau - tau_corioli - tau_pot - tau_d)
+            tau_pot = jax.grad(self.get_potential_energy)(_x)
+            kinetic_energy_hessian_fn = jax.hessian(self.get_kinetic_energy, argnums=(0, 1))
+            _, (d2L_dth_dthd, M) = kinetic_energy_hessian_fn(_x, _x_d)
+            tau_coriolis = d2L_dth_dthd @ _x_d
+
+            if self.learn_dissipation:
+                D = self.get_damping_matrix()
+                tau_d = D @ _x_d
+            else:
+                tau_d = jnp.zeros_like(_x)
+
+            debug.print("tau_pot = {tau_pot}, tau_d = {tau_d}, tau_coriolis = {tau_coriolis}", tau_pot=tau_pot, tau_d=tau_d, tau_coriolis=tau_coriolis)
+
+            lambdas = jnp.linalg.eigh(M)[0]
+            debug.print("Eigenvalues of M: {lambdas}", lambdas=lambdas)
+            M_inv = ops.linalg.inv(M)
+            lambda_M_inv = jnp.linalg.eigh(M_inv)[0]
+            debug.print("Eigenvalues of M_inv: {lambda_M_inv}", lambda_M_inv=lambda_M_inv)
+
+            debug.print("Total torque = {tau_tot}", tau_tot=(_tau - tau_coriolis - tau_pot - tau_d))
+
+            _x_dd = M_inv @ (_tau - tau_coriolis - tau_pot - tau_d)
 
             return _x_dd
 
-        if self.learn_dissipation:
-            D = self.damping_matrix_nn(x).reshape(self.configuration_dim, self.configuration_dim)
-            tau_d = jnp.dot(D, x_d)
-        else:
-            tau_d = jnp.zeros_like(x)
-
-        if self.learn_input_matrix:
-            tau_ext = self.input_matrix_nn(tau)
-        else:
-            tau_ext = tau
-
         x_dd = vmap(lnn_dynamics_fn)(x, x_d, tau_ext)
-
 
         return x_dd

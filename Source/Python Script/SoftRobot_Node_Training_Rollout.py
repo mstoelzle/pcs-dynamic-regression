@@ -234,6 +234,14 @@ if __name__ == "__main__":
                     state_dim=2 * n_chi, input_dim=n_tau, input_encoding_num_layers=5, input_encoding_hidden_dim=16,
                 ),
             ])
+        case "lnn":
+            dynamics_model = keras.Sequential([
+                keras.layers.Input(shape=(input_dim,)),
+                input_normalization_layer,
+                LnnDynamics(
+                    state_dim=2 * n_chi, input_dim=n_tau, num_layers=mlp_num_layers, hidden_dim=mlp_hidden_dim,
+                ),
+            ])
         case _:
             raise ValueError("Invalid model type")
     dynamics_model.summary()
