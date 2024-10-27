@@ -8,19 +8,21 @@ jax.config.update('jax_platform_name', 'cpu')
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from pathlib import Path
+from scipy.signal import savgol_filter
 
 # parameters
 num_segments = 2
 case_dir = Path("Source") / "Soft Robot" / f"ns-2_dof-3"
 evaluation_dir = case_dir / "evaluation"
-dataset_type = "train"
-assert dataset_type in ["train", "test"]
+dataset_type = "val"
+assert dataset_type in ["train", "val"]
 marker_indices = jnp.array([10, 15, 20])
-model_types = ["node"]
+model_types = ["pcs_regression", "node", "con"]
 assert all(model_type in ["pcs_regression", "node", "lstm", "con"] for model_type in model_types)
 
 # time step
 dt = 1e-3
+time_step_skip = 5
 
 # plotting settings
 plt.rcParams.update(
@@ -34,6 +36,7 @@ plt.rcParams.update(
 figsize = (5.0, 3.0)
 dpi = 200
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+markers = ["o", "s", "^", "v", "D", "P", "X", "H"]
 plot_marker_skip = 1
 
 if __name__ == "__main__":
@@ -87,6 +90,12 @@ if __name__ == "__main__":
     chi_gt_ts = chi_gt_ts.reshape(num_samples, -1, 3)
     chi_d_gt_ts = chi_d_gt_ts.reshape(num_samples, -1, 3)
     chi_dd_gt_ts = chi_dd_gt_ts.reshape(num_samples, -1, 3)
+
+    # subsample the ground-truth data time steps
+    ts = ts[::time_step_skip]
+    chi_gt_ts = chi_gt_ts[::time_step_skip]
+    chi_d_gt_ts = chi_d_gt_ts[::time_step_skip]
+    chi_dd_gt_ts = chi_dd_gt_ts[::time_step_skip]
         
     # subsample the ground-truth data
     # marker sub-sampling
@@ -103,23 +112,53 @@ if __name__ == "__main__":
     # load the predicted data
     rollout_ts_mdls = {}
     for model_type in model_types:
-        rollout_ts = jnp.load(evaluation_dir / f"rollout_{model_type}_{dataset_type}.npz")
-
-        # reshape the predicted data
-        rollout_ts.update(dict(
-            chi_ts=rollout_ts["chi_ts"].reshape(num_samples, -1, 3),
-            chi_d_ts=rollout_ts["chi_d_ts"].reshape(num_samples, -1, 3),
-            chi_dd_ts=rollout_ts["chi_dd_ts"].reshape(num_samples, -1, 3),
-        ))
-
         if model_type == "pcs_regression":
+            chi_ts = jnp.load(evaluation_dir / f"rollout_{model_type}_{dataset_type}.npy")
             # sub-sample the data
+            chi_ts = chi_ts[:, marker_indices, :]
+            rollout_ts = dict(chi_ts=chi_ts)
+        else:
+            rollout_ts = dict(jnp.load(evaluation_dir / f"rollout_{model_type}_{dataset_type}.npz"))
+
+            # reshape the predicted data
             rollout_ts.update(dict(
-                chi_ts=rollout_ts["chi_ts"][:, marker_indices, :],
-                chi_d_ts=rollout_ts["chi_d_ts"][:, marker_indices, :],
-                chi_dd_ts=rollout_ts["chi_dd_ts"][:, marker_indices, :],
+                chi_ts=rollout_ts["x_ts"].reshape(num_samples, -1, 3),
+                chi_d_ts=rollout_ts["x_d_ts"].reshape(num_samples, -1, 3),
             ))
+
+            # sub-sample the time steps
+            rollout_ts = {key: rollout_ts[key][::time_step_skip] for key in rollout_ts}
+
+        # compute the errors
+        # body shape error
+        position_error = jnp.mean(jnp.linalg.norm(chi_gt_ts[..., :2] - rollout_ts["chi_ts"][..., :2], axis=-1))
+        orientation_error = jnp.mean(jnp.abs(chi_gt_ts[..., 2] - rollout_ts["chi_ts"][..., 2]))
+        print(f"Model {model_type} - Position error: {position_error * 1e3:.4f} mm, Orientation error: {orientation_error:.4f} rad")
+        # end-effector error
+        end_effector_position_error = jnp.mean(jnp.linalg.norm(chi_gt_ts[..., -1, :2] - rollout_ts["chi_ts"][..., -1, :2], axis=-1))
+        end_effector_orientation_error = jnp.mean(jnp.abs(chi_gt_ts[..., -1, 2] - rollout_ts["chi_ts"][..., -1, 2]))
+        print(f"Model {model_type} - End-effector Position error: {end_effector_position_error * 1e3:.4f} mm, End-effector Orientation error: {end_effector_orientation_error:.4f} rad")
 
         rollout_ts_mdls[model_type] = rollout_ts
 
-    # plot the end-effector x-ccordinate
+    # plot the end-effector position
+    fig, axes = plt.subplots(3, 1, sharex=True)
+    axes[0].plot(ts, chi_gt_ts[:, -1, 0], label='GT', linewidth=3.5, linestyle='dotted', color='k', alpha=0.55)
+    axes[1].plot(ts, chi_gt_ts[:, -1, 1], label='GT', linewidth=3.5, linestyle='dotted', color='k', alpha=0.55)
+    axes[2].plot(ts, chi_gt_ts[:, -1, 2], label='GT', linewidth=3.5, linestyle='dotted', color='k', alpha=0.55)
+    for model_type in model_types:
+        line_label = "PCS Regression (Ours)" if model_type == "pcs_regression" else model_type.capitalize()
+        axes[0].plot(ts, rollout_ts_mdls[model_type]["chi_ts"][:, -1, 0], label=line_label, linewidth=2)
+        axes[1].plot(ts, rollout_ts_mdls[model_type]["chi_ts"][:, -1, 1], label=line_label, linewidth=2)
+        axes[2].plot(ts, rollout_ts_mdls[model_type]["chi_ts"][:, -1, 2], label=line_label, linewidth=2)
+    axes[0].set_ylabel(r'Position $p_\mathrm{x}$ $[m]$')
+    axes[1].set_ylabel(r'Position $p_\mathrm{y}$ $[m]$')
+    axes[2].set_ylabel(r'Orientation $\theta$ $[rad]$')
+    for ax in axes:
+        ax.set_xlim([0, 7.0])
+        ax.set_xlabel(r'Time $t$ $[s]$')
+        ax.legend()
+        ax.grid(True)
+
+    plt.tight_layout()
+    plt.show()
