@@ -13,6 +13,7 @@ import keras
 from keras import ops
 import matplotlib.pyplot as plt
 from pathlib import Path
+from typing import Dict
 
 from baseline_dynamical_models import ConDynamics, LnnDynamics, generate_positive_definite_matrix_from_params
 
@@ -79,31 +80,36 @@ class OdeRollout(keras.Model):
     def call(self, inputs):
         y_gt_seqs, tau_seqs = inputs[..., :self.state_dim], inputs[..., self.state_dim:]
 
-        y_pred = y_gt_seqs[..., 0, :]
-        y_pred_seqs = [y_pred]
-        for time_idx in range(1, y_gt_seqs.shape[-2]):
-            x = y_pred[..., :self.state_dim//2]
-            x_d = y_pred[..., self.state_dim//2:self.state_dim]
-            tau = tau_seqs[..., time_idx, :]
+        def scan_fn(carry: Dict, inputs: Dict):
+            y = carry["y_next"]
+            tau = inputs["tau"]
 
-            dynamics_model_inputs = ops.concatenate([y_pred, tau], axis=-1)
+            x = y[..., :self.state_dim // 2]
+            x_d = y[..., self.state_dim // 2:self.state_dim]
+
+            dynamics_model_inputs = ops.concatenate([y, tau], axis=-1)
             x_dd_pred = self.dynamics_model(dynamics_model_inputs)
 
             # state the ODE
             y_d_pred = ops.concatenate([x_d, x_dd_pred], axis=-1)
 
             # integrate the ODE with Euler's method
-            y_pred = y_pred + self.dt * y_d_pred
+            y_next = y + self.dt * y_d_pred
 
-            # append the state to the list
-            y_pred_seqs.append(y_pred)
-        
-        y_pred_seqs = ops.stack(y_pred_seqs, axis=-2)
+            carry["y_next"] = y_next
+            output = dict(y_pred=y)
+
+            return carry, output
+
+        carry0 = dict(y_next=y_gt_seqs[..., 0, :])
+        inputs = dict(tau=tau_seqs.transpose((1, 0, 2)))
+        last_carry, outputs = ops.scan(scan_fn, carry0, inputs)
+        y_pred_seqs = outputs["y_pred"].transpose((1, 0, 2))
 
         # compute the acceleration on all time steps
         y_gt_ts = y_gt_seqs.reshape(-1, self.state_dim)
         tau_ts = tau_seqs.reshape(-1, self.input_dim)
-        x_dd_pred_ts = self.dynamics_model(ops.concat([y_gt_ts, tau_ts], axis=-1))
+        x_dd_pred_ts = self.dynamics_model(ops.concatenate([y_gt_ts, tau_ts], axis=-1))
         # reshape to batch_dim x seq_len x state_dim//2
         x_dd_pred_seqs = x_dd_pred_ts.reshape(y_gt_seqs.shape[:-1] + (self.state_dim//2,))
 
