@@ -1,3 +1,4 @@
+import jax
 import numpy as onp
 import os
 
@@ -9,6 +10,7 @@ os.environ["KERAS_BACKEND"] = "jax"
 from jax import Array, debug, random, vmap
 import jax.numpy as jnp
 import keras
+from keras import ops
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -84,11 +86,11 @@ class OdeRollout(keras.Model):
             x_d = y_pred[..., self.state_dim//2:self.state_dim]
             tau = tau_seqs[..., time_idx, :]
 
-            dynamics_model_inputs = jnp.concatenate([y_pred, tau], axis=-1)
+            dynamics_model_inputs = ops.concatenate([y_pred, tau], axis=-1)
             x_dd_pred = self.dynamics_model(dynamics_model_inputs)
 
             # state the ODE
-            y_d_pred = jnp.concatenate([x_d, x_dd_pred], axis=-1)
+            y_d_pred = ops.concatenate([x_d, x_dd_pred], axis=-1)
 
             # integrate the ODE with Euler's method
             y_pred = y_pred + self.dt * y_d_pred
@@ -96,16 +98,16 @@ class OdeRollout(keras.Model):
             # append the state to the list
             y_pred_seqs.append(y_pred)
         
-        y_pred_seqs = jnp.stack(y_pred_seqs, axis=-2)
+        y_pred_seqs = ops.stack(y_pred_seqs, axis=-2)
 
         # compute the acceleration on all time steps
         y_gt_ts = y_gt_seqs.reshape(-1, self.state_dim)
         tau_ts = tau_seqs.reshape(-1, self.input_dim)
-        x_dd_pred_ts = self.dynamics_model(jnp.concat([y_gt_ts, tau_ts], axis=-1))
+        x_dd_pred_ts = self.dynamics_model(ops.concat([y_gt_ts, tau_ts], axis=-1))
         # reshape to batch_dim x seq_len x state_dim//2
         x_dd_pred_seqs = x_dd_pred_ts.reshape(y_gt_seqs.shape[:-1] + (self.state_dim//2,))
 
-        output = jnp.concatenate([y_pred_seqs, x_dd_pred_seqs], axis=-1)
+        output = ops.concatenate([y_pred_seqs, x_dd_pred_seqs], axis=-1)
 
         return output
 
@@ -281,14 +283,14 @@ if __name__ == "__main__":
             norm_error_x_d = error_x_d / chi_norm_const * (0.1 * dt)
             norm_error_x_dd = error_x_dd / chi_norm_const * (0.1 * dt)**2
             
-            norm_error = jnp.concatenate([norm_error_x, norm_error_x_d, norm_error_x_dd], axis=-1)
-            loss = jnp.mean(jnp.square(norm_error), axis=-1)
+            norm_error = ops.concatenate([norm_error_x, norm_error_x_d, norm_error_x_dd], axis=-1)
+            loss = ops.mean(ops.square(norm_error), axis=-1)
             return loss
         
 
     class NormalizedRootMeanSquaredError(NormalizedMeanSquaredError):
         def call(self, y_true, y_pred):
-            return jnp.sqrt(super().call(y_true, y_pred))
+            return ops.sqrt(super().call(y_true, y_pred))
 
 
     # lr_schedule = keras.optimizers.schedules.CosineDecay(lr, num_epochs)
