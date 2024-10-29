@@ -21,7 +21,7 @@ plt.rcParams.update(
     }
 )
 
-figsize = (5.0, 3.0)
+figsize = (5.0, 2.7)
 dpi = 200
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
