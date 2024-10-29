@@ -33,11 +33,7 @@ plt.rcParams.update(
     }
 )
 
-# if dataset_type == "train":
-#     figsize = (5.0, 3.0)
-# else:
-#     figsize = (5.0, 3.0)
-figsize = (5.0, 4.5)
+figsize = (3.8, 3.8)
 dpi = 200
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 plt_markers = ["o", "s", "^", "v", "D", "P", "X", "H"]
@@ -166,7 +162,7 @@ if __name__ == "__main__":
         axes[1].set_ylabel(r'Position $p_\mathrm{y}$ [m]')
         axes[2].set_ylabel(r'Orientation $\theta$ [rad]')
         axes[-1].set_xlabel(r'Time $t$ [s]')
-        axes[0].legend(fontsize=8)
+        axes[0].legend(fontsize=7)
         for j, ax in enumerate(axes):
             ax.set_xlim([0, ts[-1]])
             if dataset_type == "val":
@@ -183,19 +179,19 @@ if __name__ == "__main__":
 
     # plot the torque
     fig, axes = plt.subplots(3, 1, figsize=figsize, dpi=dpi)
-    axes[0].plot(ts, tau_ts[:, 0], linewidth=plt_lw, color=colors[0], label=r'$\tau_1$')
-    axes[1].plot(ts, tau_ts[:, 1], linewidth=plt_lw, color=colors[1], label=r'$\tau_2$')
-    axes[2].plot(ts, tau_ts[:, 2], linewidth=plt_lw, color=colors[2], label=r'$\tau_3$')
-    axes[0].plot(ts, tau_ts[:, 3], linewidth=plt_lw, color=colors[3], label=r'$\tau_4$')
-    axes[1].plot(ts, tau_ts[:, 4], linewidth=plt_lw, color=colors[4], label=r'$\tau_5$')
-    axes[2].plot(ts, tau_ts[:, 5], linewidth=plt_lw, color=colors[5], label=r'$\tau_6$')
+    axes[0].plot(ts, tau_ts[:, 0], linewidth=plt_lw, color=colors[0], label=r'$\tau_1$ [Nm]')
+    axes[1].plot(ts, tau_ts[:, 1], linewidth=plt_lw, color=colors[1], label=r'$\tau_2$ [N]')
+    axes[2].plot(ts, tau_ts[:, 2], linewidth=plt_lw, color=colors[2], label=r'$\tau_3$ [N]')
+    axes[0].plot(ts, tau_ts[:, 3], linewidth=plt_lw, color=colors[3], label=r'$\tau_4$ [Nm]')
+    axes[1].plot(ts, tau_ts[:, 4], linewidth=plt_lw, color=colors[4], label=r'$\tau_5$ [N]')
+    axes[2].plot(ts, tau_ts[:, 5], linewidth=plt_lw, color=colors[5], label=r'$\tau_6$ [N]')
 
     axes[-1].set_xlabel(r'Time $t$ [s]')
-    axes[0].set_ylabel(r'Bend. torques [Nm]')
-    axes[1].set_ylabel(r'Shear forces [N]')
-    axes[2].set_ylabel(r'Elongation forces [N]')
+    axes[0].set_ylabel(r'Bend. torques')
+    axes[1].set_ylabel(r'Shear forces')
+    axes[2].set_ylabel(r'Axial forces')
     for j, ax in enumerate(axes):
-        ax.legend(loc='upper right', fontsize=12)
+        ax.legend(loc='upper right', fontsize=7)
         ax.grid(True)
     plt.tight_layout()
     plt.savefig(evaluation_dir / f"torque_{dataset_type}.pdf", bbox_inches='tight')
