@@ -69,7 +69,7 @@ if __name__ == "__main__":
 
             # load the dataset
             Chi = jnp.load(dataset_dir / 'Chi_val.npy')
-            chi_gt_ts = Chi.reshape(Chi.shape[0], -1)
+            chi_gt_ts = Chi.transpose((0, 2, 1)).reshape(Chi.shape[0], -1)
             Tau = jnp.load(dataset_dir / "Tau_val.npy")
             n_chi = chi_gt_ts.shape[-1]
             tau_ts = Tau.reshape(-1, Tau.shape[-1])
