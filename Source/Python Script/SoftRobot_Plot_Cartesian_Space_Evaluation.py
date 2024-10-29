@@ -17,7 +17,7 @@ evaluation_dir = case_dir / "evaluation"
 dataset_type = "val"
 assert dataset_type in ["train", "val"]
 marker_indices = jnp.array([10, 15, 20])
-model_types = ["pcs_regression", "node", "con"]
+model_types = ["node", "con", "pcs_regression"]
 assert all(model_type in ["pcs_regression", "node", "lstm", "con"] for model_type in model_types)
 
 # time step
@@ -33,11 +33,16 @@ plt.rcParams.update(
     }
 )
 
-figsize = (5.0, 3.0)
+# if dataset_type == "train":
+#     figsize = (5.0, 3.0)
+# else:
+#     figsize = (5.0, 3.0)
+figsize = (5.0, 4.5)
 dpi = 200
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 plt_markers = ["o", "s", "^", "v", "D", "P", "X", "H"]
 plt_marker_skip = 1
+plt_lw = 2.2
 
 if __name__ == "__main__":
     # load the ground-truth data
@@ -97,6 +102,7 @@ if __name__ == "__main__":
         chi_gt_ts = chi_gt_ts[::time_step_skip]
         chi_d_gt_ts = chi_d_gt_ts[::time_step_skip]
         chi_dd_gt_ts = chi_dd_gt_ts[::time_step_skip]
+        tau_ts = tau_ts[::time_step_skip]
         
     # subsample the ground-truth data
     # marker sub-sampling
@@ -144,24 +150,53 @@ if __name__ == "__main__":
 
         rollout_ts_mdls[model_type] = rollout_ts
 
-    # plot the end-effector position
-    fig, axes = plt.subplots(3, 1, sharex=True)
-    axes[0].plot(ts, chi_gt_ts[:, -1, 0], label='GT', linewidth=3.5, linestyle='dotted', color='k', alpha=0.55)
-    axes[1].plot(ts, chi_gt_ts[:, -1, 1], label='GT', linewidth=3.5, linestyle='dotted', color='k', alpha=0.55)
-    axes[2].plot(ts, chi_gt_ts[:, -1, 2], label='GT', linewidth=3.5, linestyle='dotted', color='k', alpha=0.55)
-    for model_type in model_types:
-        line_label = "PCS Regression (Ours)" if model_type == "pcs_regression" else model_type.capitalize()
-        axes[0].plot(ts, rollout_ts_mdls[model_type]["chi_ts"][:, -1, 0], label=line_label, linewidth=2)
-        axes[1].plot(ts, rollout_ts_mdls[model_type]["chi_ts"][:, -1, 1], label=line_label, linewidth=2)
-        axes[2].plot(ts, rollout_ts_mdls[model_type]["chi_ts"][:, -1, 2], label=line_label, linewidth=2)
-    axes[0].set_ylabel(r'Position $p_\mathrm{x}$ $[m]$')
-    axes[1].set_ylabel(r'Position $p_\mathrm{y}$ $[m]$')
-    axes[2].set_ylabel(r'Orientation $\theta$ $[rad]$')
-    for ax in axes:
-        ax.set_xlim([0, ts[-1]])
-        ax.set_xlabel(r'Time $t$ $[s]$')
-        ax.legend()
-        ax.grid(True)
+    for i in range(num_markers):
+        marker_idx = marker_indices[i]
 
+        fig, axes = plt.subplots(3, 1, figsize=figsize, dpi=dpi)
+        axes[0].plot(ts, chi_gt_ts[:, i, 0], label='Ground-truth', linewidth=4, linestyle='dotted', color='k')
+        axes[1].plot(ts, chi_gt_ts[:, i, 1], label='Ground-truth', linewidth=4, linestyle='dotted', color='k')
+        axes[2].plot(ts, chi_gt_ts[:, i, 2], label='Ground-truth', linewidth=4, linestyle='dotted', color='k')
+        for model_type in model_types:
+            line_label = "PCS Regression (Ours)" if model_type == "pcs_regression" else model_type.upper()
+            axes[0].plot(ts, rollout_ts_mdls[model_type]["chi_ts"][:, i, 0], linewidth=plt_lw, label=line_label)
+            axes[1].plot(ts, rollout_ts_mdls[model_type]["chi_ts"][:, i, 1], linewidth=plt_lw, label=line_label)
+            axes[2].plot(ts, rollout_ts_mdls[model_type]["chi_ts"][:, i, 2], linewidth=plt_lw, label=line_label)
+        axes[0].set_ylabel(r'Position $p_\mathrm{x}$ [m]')
+        axes[1].set_ylabel(r'Position $p_\mathrm{y}$ [m]')
+        axes[2].set_ylabel(r'Orientation $\theta$ [rad]')
+        axes[-1].set_xlabel(r'Time $t$ [s]')
+        axes[0].legend(fontsize=8)
+        for j, ax in enumerate(axes):
+            ax.set_xlim([0, ts[-1]])
+            if dataset_type == "val":
+                y_min = jnp.min(chi_gt_ts[:, i, j])
+                y_max = jnp.max(chi_gt_ts[:, i, j])
+                y_delta = (y_max - y_min)
+                ax.set_ylim([y_min - 0.8 * y_delta, y_max + 0.8 * y_delta])
+            # ax.legend()
+            ax.grid(True)
+
+        plt.tight_layout()
+        plt.savefig(evaluation_dir / f"rollout_{dataset_type}_marker_{marker_idx}.pdf", bbox_inches='tight')
+        plt.show()
+
+    # plot the torque
+    fig, axes = plt.subplots(3, 1, figsize=figsize, dpi=dpi)
+    axes[0].plot(ts, tau_ts[:, 0], linewidth=plt_lw, color=colors[0], label=r'$\tau_1$')
+    axes[1].plot(ts, tau_ts[:, 1], linewidth=plt_lw, color=colors[1], label=r'$\tau_2$')
+    axes[2].plot(ts, tau_ts[:, 2], linewidth=plt_lw, color=colors[2], label=r'$\tau_3$')
+    axes[0].plot(ts, tau_ts[:, 3], linewidth=plt_lw, color=colors[3], label=r'$\tau_4$')
+    axes[1].plot(ts, tau_ts[:, 4], linewidth=plt_lw, color=colors[4], label=r'$\tau_5$')
+    axes[2].plot(ts, tau_ts[:, 5], linewidth=plt_lw, color=colors[5], label=r'$\tau_6$')
+
+    axes[-1].set_xlabel(r'Time $t$ [s]')
+    axes[0].set_ylabel(r'Bend. torques [Nm]')
+    axes[1].set_ylabel(r'Shear forces [N]')
+    axes[2].set_ylabel(r'Elongation forces [N]')
+    for j, ax in enumerate(axes):
+        ax.legend(loc='upper right', fontsize=12)
+        ax.grid(True)
     plt.tight_layout()
+    plt.savefig(evaluation_dir / f"torque_{dataset_type}.pdf", bbox_inches='tight')
     plt.show()
