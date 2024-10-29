@@ -36,8 +36,8 @@ plt.rcParams.update(
 figsize = (5.0, 3.0)
 dpi = 200
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-markers = ["o", "s", "^", "v", "D", "P", "X", "H"]
-plot_marker_skip = 1
+plt_markers = ["o", "s", "^", "v", "D", "P", "X", "H"]
+plt_marker_skip = 1
 
 if __name__ == "__main__":
     # load the ground-truth data
@@ -91,11 +91,12 @@ if __name__ == "__main__":
     chi_d_gt_ts = chi_d_gt_ts.reshape(num_samples, -1, 3)
     chi_dd_gt_ts = chi_dd_gt_ts.reshape(num_samples, -1, 3)
 
-    # subsample the ground-truth data time steps
-    ts = ts[::time_step_skip]
-    chi_gt_ts = chi_gt_ts[::time_step_skip]
-    chi_d_gt_ts = chi_d_gt_ts[::time_step_skip]
-    chi_dd_gt_ts = chi_dd_gt_ts[::time_step_skip]
+    if dataset_type == "val":
+        # subsample the ground-truth data time steps
+        ts = ts[::time_step_skip]
+        chi_gt_ts = chi_gt_ts[::time_step_skip]
+        chi_d_gt_ts = chi_d_gt_ts[::time_step_skip]
+        chi_dd_gt_ts = chi_dd_gt_ts[::time_step_skip]
         
     # subsample the ground-truth data
     # marker sub-sampling
@@ -112,10 +113,11 @@ if __name__ == "__main__":
     # load the predicted data
     rollout_ts_mdls = {}
     for model_type in model_types:
+        print(f"Loading model {model_type}...")
         if model_type == "pcs_regression":
             chi_ts = jnp.load(evaluation_dir / f"rollout_{model_type}_{dataset_type}.npy")
             # sub-sample the data
-            chi_ts = chi_ts[:, marker_indices, :]
+            chi_ts = chi_ts[:, marker_indices-1, :]  # -1 to account that predictions start the at the second marker
             rollout_ts = dict(chi_ts=chi_ts)
         else:
             rollout_ts = dict(jnp.load(evaluation_dir / f"rollout_{model_type}_{dataset_type}.npz"))
@@ -126,8 +128,9 @@ if __name__ == "__main__":
                 chi_d_ts=rollout_ts["x_d_ts"].reshape(num_samples, -1, 3),
             ))
 
-            # sub-sample the time steps
-            rollout_ts = {key: rollout_ts[key][::time_step_skip] for key in rollout_ts}
+            if dataset_type == "val":
+                # sub-sample the time steps
+                rollout_ts = {key: rollout_ts[key][::time_step_skip] for key in rollout_ts}
 
         # compute the errors
         # body shape error
@@ -155,7 +158,7 @@ if __name__ == "__main__":
     axes[1].set_ylabel(r'Position $p_\mathrm{y}$ $[m]$')
     axes[2].set_ylabel(r'Orientation $\theta$ $[rad]$')
     for ax in axes:
-        ax.set_xlim([0, 7.0])
+        ax.set_xlim([0, ts[-1]])
         ax.set_xlabel(r'Time $t$ $[s]$')
         ax.legend()
         ax.grid(True)
