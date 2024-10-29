@@ -14,11 +14,11 @@ from scipy.signal import savgol_filter
 num_segments = 2
 case_dir = Path("Source") / "Soft Robot" / f"ns-2_dof-3"
 evaluation_dir = case_dir / "evaluation"
-dataset_type = "val"
+dataset_type = "train"
 assert dataset_type in ["train", "val"]
-marker_indices = jnp.array([10, 15, 20])
-model_types = ["node", "con", "pcs_regression"]
-assert all(model_type in ["pcs_regression", "node", "lstm", "con"] for model_type in model_types)
+marker_indices = jnp.array([8, 14, 20])
+model_types = ["node", "lnn", "con", "pcs_regression"]
+assert all(model_type in ["pcs_regression", "lstm", "node", "lnn", "con"] for model_type in model_types)
 
 # time step
 dt = 1e-3
@@ -165,11 +165,13 @@ if __name__ == "__main__":
         axes[0].legend(fontsize=7)
         for j, ax in enumerate(axes):
             ax.set_xlim([0, ts[-1]])
-            if dataset_type == "val":
-                y_min = jnp.min(chi_gt_ts[:, i, j])
-                y_max = jnp.max(chi_gt_ts[:, i, j])
-                y_delta = (y_max - y_min)
-                ax.set_ylim([y_min - 0.8 * y_delta, y_max + 0.8 * y_delta])
+
+            # if dataset_type == "val":
+            y_min = jnp.min(chi_gt_ts[:, i, j])
+            y_max = jnp.max(chi_gt_ts[:, i, j])
+            y_delta = (y_max - y_min)
+            ax.set_ylim([y_min - 0.8 * y_delta, y_max + 0.8 * y_delta])
+
             # ax.legend()
             ax.grid(True)
 

@@ -143,7 +143,7 @@ if __name__ == "__main__":
     # print("Number of markers:", num_markers)
     # marker_indices = jnp.array([num_markers - 1])
     # marker_indices = jnp.array([num_markers // 2, num_markers - 1])
-    marker_indices = jnp.array([10, 15, 20])
+    marker_indices = jnp.array([8, 14, 20])
     print("Selected marker indices:", marker_indices)
     # reshape tensors
     Chi = Chi.reshape(num_samples, num_markers, 3)

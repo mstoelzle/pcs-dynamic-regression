@@ -35,10 +35,9 @@ print("Model dir", model_dir.resolve())
 # dataset type
 dataset_type = "train"
 assert dataset_type in ["train", "val"], "Invalid dataset type."
-marker_indices = jnp.array([10, 15, 20])
+marker_indices = jnp.array([8, 14, 20])
 
 # model type
-model_type = "node"
 assert model_type in ["pcs_regression", "node", "lstm", "con", "lnn"], "Invalid model type."
 
 # define the simulation parameters
