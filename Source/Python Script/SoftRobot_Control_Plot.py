@@ -21,7 +21,7 @@ plt.rcParams.update(
     }
 )
 
-figsize = (5.0, 2.7)
+figsize = (4.0, 3.8)
 dpi = 200
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     ax.plot(sim_ts['ts'], sim_ts['q_ts'][:, 3], linewidth=2.0, label=r"$\kappa_{\mathrm{be},2}$")
     ax.set_xlabel(r"Time $t$ [s]")
     ax.set_ylabel(r"Bending strain $\kappa_\mathrm{be}$ [rad/m]")
-    ax.legend()
+    ax.legend(fontsize=8)
     ax.grid(True)
     plt.tight_layout()
     plt.savefig(str(control_dir / 'setpoint_control_bending.pdf'))
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     ax.plot(sim_ts['ts'], sim_ts['q_ts'][:, 5], linewidth=2.0, label=r"$\sigma_{\mathrm{ax},2}$")
     ax.set_xlabel(r"Time $t$ [s]")
     ax.set_ylabel(r"Linear strains $\sigma$ [-]")
-    ax.legend()
+    ax.legend(ncols=2, fontsize=8)
     ax.grid(True)
     plt.tight_layout()
     plt.savefig(str(control_dir / 'setpoint_control_linear.pdf'))
