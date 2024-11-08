@@ -36,9 +36,10 @@ strain_selector = np.array([True, True, True, True, True, True]) # bending, shea
 string_strains = ['Bending','Shear','Axial','Bending','Shear','Axial']
 
 epsilon_bend = 5e-2
-E_max = 1e7
+E_max = 5e5
 G_max = 1e5
-# G_max = 1e9
+G_max = 1e9
+E_max = 1e7
 ####################################################################
 ## Compute additional parameters
 bending_map = [] # from the list of active states says which ones are bending state and which ones are not
@@ -79,9 +80,9 @@ rootdir = f"./Source/Soft Robot/ns-{num_segments}_dof-3/training/cv/"
 rootdir_true = f"./Source/Soft Robot/ns-{num_segments}_dof-3/training/true/"
 rootdir_val = f"./Source/Soft Robot/ns-{num_segments}_dof-3/validation/sinusoidal_actuation/"
 
-# rootdir = "./Source/Soft Robot/ns-2_dof-3_high_stiffness/training/true/"
-# rootdir_true = "./Source/Soft Robot/ns-2_dof-3_high_stiffness/training/true/"
-# rootdir_val = "./Source/Soft Robot/ns-2_dof-3_high_stiffness/validation/sinusoidal_actuation/"
+rootdir = "./Source/Soft Robot/ns-2_dof-3_high_stiffness_experiment/training/true/"
+rootdir_true = "./Source/Soft Robot/ns-2_dof-3_high_stiffness_experiment/training/true/"
+rootdir_val = "./Source/Soft Robot/ns-2_dof-3_high_stiffness_experiment/validation/sinusoidal_actuation/"
 
 X = np.vstack(np.load(rootdir + "X.npy"))
 Xdot = np.vstack(np.load(rootdir + "Xdot.npy"))
@@ -123,8 +124,8 @@ bending_indices = [i for i in range(len(bending_map)) if bending_map[i]==True]
 if bending_indices != []:
     mask = True
     for idx in bending_indices:
-        mask = mask & (np.abs(X[:,idx]) >= 1.0)
-        mask_true = mask & (np.abs(X_true[:,idx]) >= 1.0)
+        mask = mask & (np.abs(X[:,idx]) >= 3.0)
+        mask_true = mask & (np.abs(X_true[:,idx]) >= 3.0)
     X = X[mask]
     X_true = X_true[mask_true]
     Xdot = Xdot[mask]
@@ -278,8 +279,6 @@ while convergence == False:
     coeffs_before_norm = coeffs_after_norm[:,0] / norm_factor
     xi_L = coeffs_before_norm[:-n_dof]
     D = torch.diag(coeffs_before_norm[-n_dof:])
-    print('-Stiffness')
-    print(xi_L[-n_dof:])
     print('D:')
     print(D)
 
@@ -325,6 +324,8 @@ while convergence == False:
 
     # Get estimated stiffness
     stiffness = -2*np.array(xi_L[-n_dof:])
+    print('Stiffness:')
+    print(stiffness)
     # Get maximum stiffness
     max_stiffness = np.zeros((n_dof,))
     for i in range(n_dof):
@@ -411,14 +412,17 @@ while convergence == False:
 
         # Check if there's repeated basis functions or independent terms (Lagrangian is invariant to constants)
         new_Lagr_expr = []
-        for expr in Lagr_expr:
+        new_true_coeffs_before_norm = []
+        for expr, coeff in zip(Lagr_expr, true_coeffs_before_norm):
             p = expr.as_poly()
             if p != None:
                 monom = [sympy.prod(x**k for x, k in zip(p.gens, mon)) for mon in p.monoms()]
                 for m in monom:
                     if m not in new_Lagr_expr:
                         new_Lagr_expr.append(m)
+                        new_true_coeffs_before_norm.append(coeff)
         Lagr_expr = new_Lagr_expr
+        true_coeffs_before_norm = np.array(new_true_coeffs_before_norm)
 
 
         states_sym = [ele for idx, ele in enumerate(states_sym) if (np.all(idx != neglect_strain_index) and np.all(idx != neglect_strain_index+n_dof))]
@@ -433,6 +437,8 @@ while convergence == False:
         string_strains = [ele for idx, ele in enumerate(string_strains) if np.all(idx != neglect_strain_index)]
         bending_map = [ele for idx, ele in enumerate(bending_map) if np.all(idx != neglect_strain_index)]
         strain_segments = [ele for idx, ele in enumerate(strain_segments) if np.all(idx != neglect_strain_index)]
+        strain_selector = np.array([True if i not in neglect_strain_index else False for i in range(3*num_segments)])
+        B_xi = compute_strain_basis(strain_selector)
 
         # Delete neglected strains
         X = np.delete(X, [*neglect_strain_index, *neglect_strain_index+n_dof], 1)
@@ -533,7 +539,7 @@ def softrobot(t,x,args):
     x_epsed_list = []
     for i in range(x.shape[0]//2):
         if bending_map[i] == True:
-            q_epsed = apply_eps_to_bend_strains_jnp(x_[i], 2e0)
+            q_epsed = apply_eps_to_bend_strains_jnp(x_[i], 6e0)
         else:
             q_epsed = x_[i]
         
@@ -542,7 +548,7 @@ def softrobot(t,x,args):
     x_epsed = jnp.asarray(x_epsed_list)
     
     tau, D = args
-    x_tt = jnp.linalg.inv(zeta_expr_lambda(*x_, *x_epsed).T) @ (tau - D @ x_t + delta_expr_lambda(*x_, *x_t, *x_epsed)[:,0] - eta_expr_lambda(*x_, *x_t, *x_epsed).T @ x_t)
+    x_tt = jnp.linalg.inv(zeta_expr_lambda(*x_, *x_epsed).T + 5e-6*np.identity(6)) @ (tau - D @ x_t + delta_expr_lambda(*x_, *x_t, *x_epsed)[:,0] - eta_expr_lambda(*x_, *x_t, *x_epsed).T @ x_t)
     return jnp.concatenate([x_t, x_tt])
 
 ## Validation results ##
